@@ -1,0 +1,174 @@
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import String, DateTime, func, ForeignKey, Index, text, Numeric, Date
+from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
+from env_config import settings
+from datetime import datetime, date
+from fastapi import FastAPI
+import asyncio
+from cloudinary.utils import cloudinary_url
+from decimal import Decimal
+
+engine = create_async_engine(settings.postgres_url)
+
+Base = declarative_base()
+
+
+class Friends(Base):
+    __tablename__ = "friends"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"), primary_key=True
+    )
+    friend_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    # gets the user who sent the request
+    user: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[user_id],
+        back_populates="sent_friendships",
+        lazy="selectin",
+    )
+
+    # gets the user who received the request
+    friend: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[friend_id],
+        back_populates="received_friendships",
+        lazy="selectin",
+    )
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    email: Mapped[str] = mapped_column(String(255), unique=True)
+    password: Mapped[str] = mapped_column(String(255))
+    mobile_number: Mapped[str] = mapped_column(String(10), unique=True)
+    profile_picture: Mapped[str] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # friends
+    # it's not like you actually sent, but your id is smaller, that's why in user_id, your id is stored
+    sent_friendships: Mapped[list["Friends"]] = relationship(
+        "Friends",
+        foreign_keys="Friends.user_id",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    # it's not like you actually received and accepted that request, but your id is larger than other id, that's why in friend_id, your id is stored
+    received_friendships: Mapped[list["Friends"]] = relationship(
+        "Friends",
+        foreign_keys="Friends.friend_id",
+        back_populates="friend",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    # invitations
+    invitations: Mapped[list["Invitation"]] = relationship(
+        "Invitation",
+        foreign_keys="Invitation.inviter_id",
+        back_populates="inviter",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    # expenses created by you
+    expenses: Mapped[list["Expense"]] = relationship(
+        "Expense",
+        foreign_keys="Expense.created_by",
+        back_populates="creator",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    @property
+    def profile_picture_path(self):
+        if self.profile_picture:
+            url, _ = cloudinary_url(self.profile_picture)
+            return url
+        return "/static/pictures/default.png"
+
+
+class Invitation(Base):
+    __tablename__ = "invitations"
+
+    # unique constraint on inviter_id, invitee_id ans pending status
+    __table_args__ = (
+        Index(
+            "unique_pending_invitation",
+            "inviter_id",
+            "invitee_id",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    inviter_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
+    )
+    invitee_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"), nullable=True
+    )
+    invitee_email: Mapped[str] = mapped_column(String(255), nullable=True)
+    invitee_mobile_number: Mapped[str] = mapped_column(String(10), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    inviter: Mapped["User"] = relationship(
+        "User", foreign_keys=[inviter_id], back_populates="invitations", lazy="selectin"
+    )
+
+
+class Expense(Base):
+    __tablename__ = "expenses"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str] = mapped_column(String(1000), nullable=True)
+    note: Mapped[str] = mapped_column(String(1000), nullable=True)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    expense_date: Mapped[date] = mapped_column(Date)
+    created_by: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    creator: Mapped["User"] = relationship(
+        "User", foreign_keys=[created_by], back_populates="expenses", lazy="selectin"
+    )
+
+
+# asynchronous way to create database tables
+async def create_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
+if __name__ == "__main__":
+    asyncio.run(create_tables())
