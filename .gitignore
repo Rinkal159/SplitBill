@@ -1,3 +1,6 @@
 .env
 *env_config.py
 .venv
+*Database_tables.txt
+*__pycache__
+*__init__.py
