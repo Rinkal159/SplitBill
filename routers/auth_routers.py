@@ -11,6 +11,7 @@ from auth.authentication import get_current_user
 from schemas.user_schema import (
     UserCreate as UserCreateSchema,
     UserLogin as UserLoginSchema,
+    UserResponse as UserResponseSchema
 )
 from model import User, Invitation
 
@@ -18,7 +19,7 @@ auth_router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 
 # * signup
-@auth_router.post("/signup", status_code=status.HTTP_201_CREATED)
+@auth_router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=UserResponseSchema)
 async def signup_api(
     user: UserCreateSchema = Depends(UserCreateSchema.as_form),
     profilePicture: UploadFile | None = File(None),
@@ -61,7 +62,8 @@ async def signup_api(
 
     new_user = User(**user_dict)
     db.add(new_user)
-    await db.commit()
+    
+    await db.flush()
 
     # check pending invitations
     result = await db.execute(
@@ -93,10 +95,11 @@ async def signup_api(
             seen.add(invitation.inviter_id)
 
     await db.commit()
+    await db.refresh(new_user)
 
-    message = f"{user.name}, you've been signup up successfully!"
+    # message = f"{user.name}, you've been signup up successfully!"
 
-    return {"message": message}
+    return new_user
 
 
 # * login
