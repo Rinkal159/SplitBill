@@ -32,6 +32,7 @@ class InvitationUpdate(Base):
 
 
 class UserDetail(Base):
+    id: int
     name: str
     email: str
     mobile_number: str
