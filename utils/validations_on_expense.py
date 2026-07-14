@@ -22,7 +22,7 @@ def validate(
     if set(user_ids) != participant_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Each participant must have exactly one {item_name} entry",
+            detail=f"Each participant should have one {item_name} entry",
         )
 
     # payment amount is less than 0
