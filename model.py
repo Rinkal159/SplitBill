@@ -96,6 +96,15 @@ class User(Base):
         lazy="selectin",
     )
 
+    # splits where you're the part of it
+    splits: Mapped[list["Splits"]] = relationship(
+        "Splits",
+        foreign_keys="Splits.user_id",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
     @property
     def profile_picture_path(self):
         if self.profile_picture:
@@ -160,7 +169,45 @@ class Expense(Base):
     )
 
     creator: Mapped["User"] = relationship(
-        "User", foreign_keys=[created_by], back_populates="expenses", lazy="selectin"
+        "User",
+        foreign_keys=[created_by],
+        back_populates="expenses",
+        lazy="selectin",
+    )
+
+    splits: Mapped[list["Splits"]] = relationship(
+        "Splits",
+        foreign_keys="Splits.expense_id",
+        back_populates="expense",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+
+class Splits(Base):
+    __tablename__ = "splits"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    expense_id: Mapped[int] = mapped_column(
+        ForeignKey("expenses.id", onupdate="CASCADE", ondelete="CASCADE")
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
+    )
+    share_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    paid_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    expense: Mapped["Expense"] = relationship(
+        "Expense", foreign_keys=[expense_id], back_populates="splits", lazy="selectin"
+    )
+    user: Mapped["User"] = relationship(
+        "User", foreign_keys=[user_id], back_populates="splits", lazy="selectin"
     )
 
 
