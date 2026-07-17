@@ -1,0 +1,63 @@
+* 1. POST - /api/expense - Create an expense
+    expense table data:
+
+    {
+        "id": int
+        "title": str
+        "description": str | None
+        "note": str | None
+        "total_amount": Decimal
+        "expense_date": date
+    }
+
+
+* 2. GET - /api/expenses - Get all the expenses
+    {
+        "expenses": [
+            {
+                "expense": <that_expense_details>,
+                "your_settlements": {
+                    "to_user": <borrowed_or_lent_user>,
+                    "balance": <negative if borrowed, positive if lent>
+                },
+                "other_settlements": {
+                    "from_user": <debtor_user>
+                    "to_user": <creditor_user>,
+                    "balance": <negative_balance>
+                },
+
+            }
+        ]
+    }
+
+
+* 3. GET - /api/expenses/you - Get all borrowings and lendings
+    {
+        "total_borrowings" : <total_borrowed_money>,
+        "total_lendings" : <total_lent_money>,
+        "borrowings" : [
+            {
+                "borrowed_from" : <user>,
+                "amount" : <total_amount_borrowed_from_this_user"
+            }
+        ],
+        "lendings" : [
+            {
+                "lent_to" : <user>,
+                "amount" : <total_amount_lent_to_this_user"
+            }
+        ]
+    }
+
+
+* 4. GET - /api/expenses/friends/{friend_id} - Get all the expenses where you and your friend is involved
+    {
+        "friend" : <friend_details>,
+        "settlements" : [
+            {
+                "expense" : <expense_details>,
+                "settlement" : <positive balance if lent, negative balance if borrowed>
+            }
+        ],
+        "total_balance" : <calculates total balance, positive if you lent more than borrowed, and negative if you borrowed more than you lent>
+    }
