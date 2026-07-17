@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy import String, DateTime, func, ForeignKey, Index, text, Numeric, Date
+from sqlalchemy import String, DateTime, UniqueConstraint, func, ForeignKey, Index, text, Numeric, Date
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
 from env_config import settings
 from datetime import datetime, date
@@ -97,12 +97,30 @@ class User(Base):
     )
 
     # splits where you're the part of it
-    splits: Mapped[list["Splits"]] = relationship(
-        "Splits",
-        foreign_keys="Splits.user_id",
+    expense_splits: Mapped[list["ExpenseSplits"]] = relationship(
+        "ExpenseSplits",
+        foreign_keys="ExpenseSplits.user_id",
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin",
+    )
+
+    # all the settlements where you're "payer"
+    as_payer: Mapped[list["Settlement"]] = relationship(
+        "Settlement",
+        foreign_keys="Settlement.from_user",
+        back_populates="payer",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+    # all the settlements where you're "receiver"
+    as_receiver: Mapped[list["Settlement"]] = relationship(
+        "Settlement",
+        foreign_keys="Settlement.to_user",
+        back_populates="receiver",
+        lazy="selectin",
+        cascade="all, delete-orphan",
     )
 
     @property
@@ -175,17 +193,25 @@ class Expense(Base):
         lazy="selectin",
     )
 
-    splits: Mapped[list["Splits"]] = relationship(
-        "Splits",
-        foreign_keys="Splits.expense_id",
+    expense_splits: Mapped[list["ExpenseSplits"]] = relationship(
+        "ExpenseSplits",
+        foreign_keys="ExpenseSplits.expense_id",
+        back_populates="expense",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+    settlements: Mapped[list["Settlement"]] = relationship(
+        "Settlement",
+        foreign_keys="Settlement.expense_id",
         back_populates="expense",
         lazy="selectin",
         cascade="all, delete-orphan",
     )
 
 
-class Splits(Base):
-    __tablename__ = "splits"
+class ExpenseSplits(Base):
+    __tablename__ = "expense_splits"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     expense_id: Mapped[int] = mapped_column(
@@ -204,10 +230,110 @@ class Splits(Base):
     )
 
     expense: Mapped["Expense"] = relationship(
-        "Expense", foreign_keys=[expense_id], back_populates="splits", lazy="selectin"
+        "Expense",
+        foreign_keys=[expense_id],
+        back_populates="expense_splits",
+        lazy="selectin",
     )
     user: Mapped["User"] = relationship(
-        "User", foreign_keys=[user_id], back_populates="splits", lazy="selectin"
+        "User", foreign_keys=[user_id], back_populates="expense_splits", lazy="selectin"
+    )
+
+    # which settlement splits settling up this expense split, one expense split can appear in many settlement splits
+    settlement_splits: Mapped[list["SettlementSplits"]] = relationship(
+        "SettlementSplits",
+        foreign_keys="SettlementSplits.split_id",
+        back_populates="expense_split",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+
+class Settlement(Base):
+    __tablename__ = "settlements"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    expense_id: Mapped[int] = mapped_column(
+        ForeignKey("expenses.id", onupdate="CASCADE", ondelete="CASCADE"), nullable=True
+    )
+    from_user: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
+    )
+    to_user: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    settled_at: Mapped[date] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    # if user is setting up expensewise, then for which expense
+    expense: Mapped["Expense"] = relationship(
+        "Expense",
+        foreign_keys=[expense_id],
+        back_populates="settlements",
+        lazy="selectin",
+    )
+
+    # payer
+    payer: Mapped["User"] = relationship(
+        "Users", foreign_keys=[from_user], back_populates="as_payer", lazy="selectin"
+    )
+
+    # receiver
+    receiver: Mapped["User"] = relationship(
+        "Users", foreign_keys=[to_user], back_populates="as_receiver", lazy="selectin"
+    )
+
+    # all the splits of this settlement
+    settlement_splits: Mapped[list["SettlementSplits"]] = relationship(
+        "SettlementSplits",
+        foreign_keys="SettlementSplits.settlement_id",
+        back_populates="settlement",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+
+# the sole reason behind creating settlement_splits table is when user's trying to settling up the overall debt, not by expensewise,
+# if user settles up expensewise, then only one split of that expense which is between the user and the friend is being settling up,
+# but when user settles up the debt overally then more than one expense may be settling up internally, so creating settlements_splits that stores settlement id and split id - which is being settled and the amount of that split.
+
+
+class SettlementSplits(Base):
+    __tablename__ = "settlement_splits"
+    
+    __table_args__ = (
+        UniqueConstraint("settlement_id", "split_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    settlement_id: Mapped[int] = mapped_column(
+        ForeignKey("settlements.id", onupdate="CASCADE", ondelete="CASCADE"), index=True
+    )
+    split_id: Mapped[int] = mapped_column(
+        ForeignKey("expense_splits.id", onupdate="CASCADE", ondelete="CASCADE"), index=True
+    )
+    amount_settled: Mapped[Decimal] = mapped_column(Numeric(10, 2))  # part of that split amount
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    # this split is part of which settlement
+    settlement: Mapped["Settlement"] = relationship(
+        "Settlement",
+        foreign_keys=[settlement_id],
+        back_populates="settlement_splits",
+        lazy="selectin",
+    )
+
+    # for which expense split, this settlement is done
+    expense_split: Mapped["ExpenseSplits"] = relationship(
+        "ExpenseSplits",
+        foreign_keys=[split_id],
+        back_populates="settlement_splits",
+        lazy="selectin",
     )
 
 
