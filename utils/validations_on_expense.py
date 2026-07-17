@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from decimal import Decimal
 
 
-def validate(
+def validate_payments_and_splits(
     participant_ids: set[int],
     items,
     total_amount: Decimal,
@@ -27,6 +27,12 @@ def validate(
 
     # payment amount is less than 0
     for item in items:
+        if getattr(item, value_field) is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Please provide '{value_field}' in '{item_name}'",
+            )
+
         if getattr(item, value_field) < 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
