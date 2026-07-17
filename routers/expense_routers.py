@@ -1,102 +1,43 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, status, Response
+from sqlalchemy import select, or_, and_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from auth.authentication import get_current_user
-from utils.validations_on_expense import validate
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from sqlalchemy.orm import selectinload
-from utils.dynamic_append import append_in_logs
+from utils.get_creditors_debtors import get_creditors_debtors
+from utils.get_expense_groups import generate_expense_groups
+from utils.validate_fields import validate_fields
+from utils.create_splits_of_expense import create_expense_splits
+from utils.get_friend_settlement_data import get_friend_settlement_data
 
 from schemas.expense_schema import (
     ExpenseCreate as ExpenseCreateSchema,
+    ExpenseCreateResponse as ExpenseCreateResponseSchema,
     ExpensesResponse as ExpenseResponseSchema,
-    BorrowingsAndLendings as BorrowingsAndLendingsSchema
+    BorrowingsAndLendings as BorrowingsAndLendingsSchema,
+    FriendsSettlementsResponse as FriendsSettlementsResponseSchema,
+    UserDetail as UserDetailSchema,
 )
-from model import Expense, Splits
+from model import Expense, ExpenseSplits, Friends
 
 expense_router = APIRouter(prefix="/api/expenses", tags=["Expenses"])
 
 
 # * add an expense
-@expense_router.post("/add")
+@expense_router.post("/", response_model=ExpenseCreateResponseSchema)
 async def add_expense_api(
     expense: ExpenseCreateSchema,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
 
-    # ^ participants validation
     participant_ids = set(expense.participants)
 
-    # if current user is not included in participants
-    if current_user.id not in participant_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You must be included in as a participant",
-        )
+    # validate participnats, payments and splits
+    validate_fields(expense, participant_ids, current_user)
 
-    # if duplicate ids in participnats
-    if len(expense.participants) != len(participant_ids):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Duplicate IDs are not allowed",
-        )
-
-    # get all the friend ids
-    friends_ids = {
-        current_user.id,
-        *[friend.friend_id for friend in current_user.sent_friendships],
-        *[friend.user_id for friend in current_user.received_friendships],
-    }
-
-    # user is a pariticipant but not a friend
-    invalid_ids = participant_ids - friends_ids
-    if invalid_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot split an expense with non-friend users: {sorted(invalid_ids)}",
-        )
-
-    # ^ payments validation
-    validate(
-        items=expense.payments,
-        participant_ids=participant_ids,
-        total_amount=expense.total_amount,
-        item_name="payment",
-        value_field="amount",
-    )
-
-    # ^ splits validation
-    if expense.split_method == "equal" and expense.splits is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Equal splits does not require split values",
-        )
-
-    if expense.split_method in {"amount", "percentage"} and expense.splits is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Amount and percentage splits require split values",
-        )
-
-    if expense.split_method == "amount":
-        validate(
-            items=expense.splits,
-            participant_ids=participant_ids,
-            total_amount=expense.total_amount,
-            item_name="split",
-            value_field="amount",
-        )
-    elif expense.split_method == "percentage":
-        validate(
-            items=expense.splits,
-            participant_ids=participant_ids,
-            total_amount=Decimal("100"),
-            item_name="split",
-            value_field="percentage",
-        )
-
+    # creating a new expense
     new_expense = Expense(
         title=expense.title,
         description=expense.description,
@@ -109,43 +50,29 @@ async def add_expense_api(
 
     await db.flush()
 
-    # each participant should pay
-    if expense.split_method == "equal":
-        share = (expense.total_amount / Decimal(len(participant_ids))).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
+    try:
+        # creating splits of that expense
+        await create_expense_splits(
+            db=db,
+            expense=expense,
+            participant_ids=participant_ids,
+            expense_data=new_expense,
         )
 
-        share_amounts = {user_id: share for user_id in participant_ids}
+        await db.commit()
+        await db.refresh(new_expense)
 
-    elif expense.split_method == "amount":
-        share_amounts = {
-            split.user_id: split.amount for split in expense.splits  # type: ignore
-        }
-
-    else:
-        share_amounts = {
-            split.user_id: expense.total_amount * split.percentage / Decimal("100")  # type: ignore
-            for split in expense.splits  # type: ignore
-        }
-
-    # each participant actually paid
-    paid_amounts = {payment.user_id: payment.amount for payment in expense.payments}
-
-    for participant_id in participant_ids:
-        new_split = Splits(
-            expense_id=new_expense.id,
-            user_id=participant_id,
-            share_amount=share_amounts[participant_id],
-            paid_amount=paid_amounts[participant_id],
+    except Exception:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error spliting expense",
         )
-        db.add(new_split)
 
-    await db.commit()
-
-    return {"message": "Added an expense successfully!"}
+    return new_expense
 
 
-# * get all expenses in which you're invloved
+# * get all expenses in which you're involved
 @expense_router.get("/", response_model=ExpenseResponseSchema)
 async def get_all_expenses(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
@@ -153,40 +80,28 @@ async def get_all_expenses(
 
     # get all expenses in which you're involved
     result = await db.execute(
-        select(Splits.expense_id)
-        .where(Splits.user_id == current_user.id)
-        .order_by(Splits.expense_id)
+        select(ExpenseSplits.expense_id).where(ExpenseSplits.user_id == current_user.id)
     )
-    existed_expenses = result.scalars().all()
+    expense_ids = result.scalars().all()
 
-    transactions = []
+    # sorted in descending order of expense date
+    expense_groups = await generate_expense_groups(
+        expense_ids=expense_ids, db=db, wantSorted=True
+    )
 
-    for expense_id in existed_expenses:
+    settlements = []
 
-        # get the splits of every expense
-        result = await db.execute(
-            select(Splits)
-            .options(selectinload(Splits.user))
-            .where(Splits.expense_id == expense_id)
-            .order_by(Splits.expense_id)
-        )
-        splits = result.scalars().all()
+    for splits in expense_groups:
+        expense = splits[0].expense
 
         creditors = []
         debtors = []
-
-        for split in splits:
-            balance = split.paid_amount - split.share_amount
-            if balance > 0:
-                creditors.append({"user": split.user, "balance": balance})
-            elif balance < 0:
-                debtors.append({"user": split.user, "balance": balance})
+        get_creditors_debtors(splits, creditors, debtors)
 
         i = 0  # creditor
         j = 0  # debtor
 
-        your_owes = []
-        your_owed = []
+        your_logs = []
         other_logs = []
 
         while i < len(creditors) and j < len(debtors):
@@ -198,106 +113,78 @@ async def get_all_expenses(
 
             transfer = min(creditor_balance, debtor_balance)
 
-
-            # if you're creditor then you're owed to other participants (Paisa lena h)
+            # you're a creditor then you "lent"
             if creditor["user"].id == current_user.id:
-                append_in_logs(
-                    logs=your_owed,
-                    user=current_user,
-                    owe_d="owed",
-                    owe_dValue=transfer,
-                    to={
-                        "id": debtor["user"].id,
-                        "name": debtor["user"].name,
-                        "profile_picture": debtor["user"].profile_picture,
-                    },
+                your_logs.append(
+                    {
+                        "to_user": UserDetailSchema.model_validate(debtor["user"]),
+                        "amount": transfer,
+                    }
                 )
 
-
-            # if you're debtor then you owed to other participants (Paisa dena h)
+            # you're a debtor then you "borrowed"
             elif debtor["user"].id == current_user.id:
-                append_in_logs(
-                    logs=your_owes,
-                    user=current_user,
-                    owe_d="owes",
-                    owe_dValue=transfer,
-                    to={
-                        "id": creditor["user"].id,
-                        "name": creditor["user"].name,
-                        "profile_picture": creditor["user"].profile_picture,
-                    },
+                your_logs.append(
+                    {
+                        "to_user": UserDetailSchema.model_validate(creditor["user"]),
+                        "amount": -transfer,
+                    }
                 )
-                
-            
-            # other participnat
+
+            # other settlements
             else:
-                append_in_logs(
-                    logs=other_logs,
-                    user={
-                        "id": debtor["user"].id,
-                        "name": debtor["user"].name,
-                        "profile_picture": debtor["user"].profile_picture,
-                    },
-                    owe_d="owes",
-                    owe_dValue=transfer,
-                    to={
-                        "id": creditor["user"].id,
-                        "name": creditor["user"].name,
-                        "profile_picture": creditor["user"].profile_picture,
-                    },
+                other_logs.append(
+                    {
+                        "from_user": UserDetailSchema.model_validate(debtor["user"]),
+                        "to_user": UserDetailSchema.model_validate(creditor["user"]),
+                        "amount": -transfer,
+                    }
                 )
 
             creditor["balance"] -= transfer
             debtor["balance"] += transfer
 
-            if creditor["balance"] == 0:
+            if creditor["balance"] <= Decimal("0"):
                 i += 1
 
-            if debtor["balance"] == 0:
+            if debtor["balance"] <= Decimal("0"):
                 j += 1
 
-        result = await db.execute(select(Expense).where(Expense.id == expense_id))
-        transactions.append(
+        settlements.append(
             {
-                "expense": result.scalars().one_or_none(),
-                "your_borrowings": your_owes,
-                "your_lentings": your_owed,
-                "other_transactions": other_logs,
+                "expense": expense,
+                "your_settlements": your_logs,
+                "other_settlements": other_logs,
             }
         )
 
-    return {"expenses": transactions}
+    return {"expenses": settlements}
 
 
-#* get all your borrowings and lendings
+# * get all your borrowings and lendings
 @expense_router.get("/you", response_model=BorrowingsAndLendingsSchema)
-async def get_all_borrowing_lentings_api(db: AsyncSession=Depends(get_db), current_user=Depends(get_current_user)):
+async def get_all_borrowing_lentings_api(
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
+):
     # get all expenses in which you're involved
     result = await db.execute(
-        select(Splits.expense_id)
-        .where(Splits.user_id == current_user.id)
-        .order_by(Splits.expense_id)
+        select(ExpenseSplits.expense_id)
+        .where(ExpenseSplits.user_id == current_user.id)
+        .order_by(ExpenseSplits.expense_id)
     )
-    existed_expenses = result.scalars().all()
-    
+    expense_ids = result.scalars().all()
+
+    expense_groups = await generate_expense_groups(
+        expense_ids=expense_ids, db=db, wantSorted=True
+    )
+
     general_balance = {}
-    
-    
-    for expense_id in existed_expenses:
-        result = await db.execute(select(Splits).options(selectinload(Splits.user)).where(Splits.expense_id == expense_id))
-        splits = result.scalars().all()
-        
+
+    for splits in expense_groups:
         creditors = []
         debtors = []
-        
-        for split in splits:
-            balance = split.paid_amount - split.share_amount
-            if balance > 0:
-                creditors.append({"user" : split.user, "balance" : balance})
-            elif balance < 0:
-                debtors.append({"user" : split.user, "balance" : balance})
-    
-        
+        get_creditors_debtors(splits, creditors, debtors)
+
         i = 0  # creditor
         j = 0  # debtor
 
@@ -310,67 +197,167 @@ async def get_all_borrowing_lentings_api(db: AsyncSession=Depends(get_db), curre
 
             transfer = min(creditor_balance, debtor_balance)
 
-
             # if you're creditor then you "lent" to other participants (Paisa diya)
             if creditor["user"].id == current_user.id:
                 debtor_id = debtor["user"]
                 existed_debtor = general_balance.get(debtor_id.id)
-                
-                general_balance[debtor_id.id] = {
-                    "user" : {
-                        "id": debtor_id.id,
-                        "name" : debtor_id.name,
-                        "profile_picture" : debtor_id.profile_picture
-                    },
-                    "amount" : existed_debtor["amount"] + transfer if existed_debtor else transfer
-                }
 
+                general_balance[debtor_id.id] = {
+                    "user": UserDetailSchema.model_validate(debtor["user"]),
+                    "amount": (
+                        existed_debtor["amount"] + transfer
+                        if existed_debtor
+                        else transfer
+                    ),
+                }
 
             # if you're debtor then you "borrowed" from other participants (Paisa liya)
             elif debtor["user"].id == current_user.id:
                 creditor_id = creditor["user"]
                 existed_creditor = general_balance.get(creditor_id.id)
                 general_balance[creditor_id.id] = {
-                    "user" : {
-                        "id":creditor_id.id,
-                        "name" : creditor_id.name,
-                        "profile_picture" : creditor_id.profile_picture
-                    },
-                    "amount" : existed_creditor["amount"] - transfer if existed_creditor else -transfer
+                    "user": UserDetailSchema.model_validate(creditor["user"]),
+                    "amount": (
+                        existed_creditor["amount"] - transfer
+                        if existed_creditor
+                        else -transfer
+                    ),
                 }
-                
 
             creditor["balance"] -= transfer
             debtor["balance"] += transfer
 
-            if creditor["balance"] == 0:
+            if creditor["balance"] <= Decimal("0"):
                 i += 1
 
-            if debtor["balance"] == 0:
+            if debtor["balance"] <= Decimal("0"):
                 j += 1
-    
-    
+
     borrowings = []
     lendings = []
     total_borrowings = Decimal("0")
     total_lendings = Decimal("0")
-    
+
     for curr in general_balance.values():
         if curr.get("amount") == 0:
             continue
-        
+
         if curr.get("amount") < 0:
             total_borrowings += abs(curr.get("amount"))
-            borrowings.append({
-                "amount" : abs(curr.get("amount")),
-                "borrowed_from" : curr.get("user")
-            })
+            borrowings.append(
+                {"borrowed_from": curr.get("user"), "amount": abs(curr.get("amount"))}
+            )
         else:
             total_lendings += curr.get("amount")
-            lendings.append({
-                "amount" : curr.get("amount"),
-                "lent_to" : curr.get("user")
-            })
-    
-    return {"total_borrowings":total_borrowings, "total_lendings" :total_lendings, "borrowings" : borrowings, "lendings" : lendings}
-     
+            lendings.append({"lent_to": curr.get("user"), "amount": curr.get("amount")})
+
+    return {
+        "total_borrowings": total_borrowings,
+        "total_lendings": total_lendings,
+        "borrowings": borrowings,
+        "lendings": lendings,
+    }
+
+
+# * get all expenses in which you and your friend is involved
+@expense_router.get(
+    "/friends/{friend_id}", response_model=FriendsSettlementsResponseSchema
+)
+async def get_friends_settlements_api(
+    friend_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return await get_friend_settlement_data(
+        friend_id=friend_id, db=db, current_user=current_user
+    )
+
+
+# * delete an expense
+@expense_router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_expense_api(
+    expense_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    # expense doesn't exist
+    result = await db.execute(select(Expense).where(Expense.id == expense_id))
+    existed_expense = result.scalars().one_or_none()
+    if not existed_expense:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found"
+        )
+
+    # you're not the creator of expense
+    if existed_expense.created_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You're not authorized to perform requested action",
+        )
+
+    await db.delete(existed_expense)
+    await db.commit()
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# * update an expense
+@expense_router.put("/{expense_id}", response_model=ExpenseCreateResponseSchema)
+async def update_expense_api(
+    expense_id: int,
+    expense: ExpenseCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    # expense doesn't exist
+    result = await db.execute(select(Expense).where(Expense.id == expense_id))
+    existed_expense = result.scalars().one_or_none()
+    if not existed_expense:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found"
+        )
+
+    # you're not the creator of expense
+    if existed_expense.created_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You're not authorized to perform requested action",
+        )
+
+    participant_ids = set(expense.participants)
+
+    # validate participnats, payments and splits
+    validate_fields(expense, participant_ids, current_user)
+
+    # updating expense
+    existed_expense.title = expense.title
+    existed_expense.description = expense.description  # type: ignore[call-args]
+    existed_expense.note = expense.note  # type: ignore[call-args]
+    existed_expense.total_amount = expense.total_amount
+    existed_expense.expense_date = expense.expense_date
+
+    try:
+        # deleting previous splits of that expense
+        await db.execute(
+            delete(ExpenseSplits).where(ExpenseSplits.expense_id == expense_id)
+        )
+
+        # creating new splits
+        await create_expense_splits(
+            db=db,
+            expense=expense,
+            participant_ids=participant_ids,
+            expense_data=existed_expense,
+        )
+
+        await db.commit()
+        await db.refresh(existed_expense)
+
+    except Exception:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error spliting expense",
+        )
+
+    return existed_expense
