@@ -14,7 +14,7 @@ class PaymentSchema(Base):
     amount: Annotated[Decimal, Field(ge=0)]
 
 
-class SplitSchema(Base):
+class ExpenseSplitSchema(Base):
     user_id: int
     amount: Annotated[Decimal | None, Field(ge=0)] = None
     percentage: Annotated[Decimal | None, Field(ge=0)] = None
@@ -32,7 +32,17 @@ class ExpenseCreate(Base):
     payments: list[PaymentSchema]
 
     split_method: Literal["equal", "amount", "percentage"]
-    splits: list[SplitSchema] | None = None
+    expense_splits: list[ExpenseSplitSchema] | None = None
+    
+    
+class ExpenseCreateResponse(Base):
+    id: int
+    title: str
+    description: str | None
+    note: str | None
+    total_amount: Decimal
+    expense_date: date
+    
 
 
 # * ExpenseResponse
@@ -48,29 +58,21 @@ class UserDetail(Base):
     profile_picture: str
 
 
-class TransactionSchema(Base):
-    user: UserDetail
-    owes: Decimal
-    to: UserDetail
+class YourSettlementSchema(Base):
+    to_user: UserDetail
+    amount: Decimal
 
 
-class YourOwesTransactionSchema(Base):
-    user: UserDetail
-    owes: Decimal
-    to: UserDetail
-
-
-class YourOwedTransactionSchema(Base):
-    user: UserDetail
-    owed: Decimal
-    to: UserDetail
+class SettlementSchema(Base):
+    from_user: UserDetail
+    to_user: UserDetail
+    amount: Decimal
 
 
 class ExpenseSchema(Base):
     expense: ExpenseDetail
-    your_borrowings: list[YourOwesTransactionSchema]
-    your_lentings: list[YourOwedTransactionSchema]
-    other_transactions: list[TransactionSchema]
+    your_settlements: list[YourSettlementSchema]
+    other_settlements: list[SettlementSchema]
 
 
 class ExpensesResponse(Base):
@@ -93,3 +95,15 @@ class BorrowingsAndLendings(Base):
     total_lendings: Decimal
     borrowings: list[Borrowings]
     lendings: list[Lendings]
+
+
+# * FriendsSettlements
+class FriendsSettlements(Base):
+    expense: ExpenseDetail
+    settlement: Decimal
+
+
+class FriendsSettlementsResponse(Base):
+    friend: UserDetail
+    settlements: list[FriendsSettlements]
+    total_balance: Decimal
