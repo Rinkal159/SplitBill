@@ -3,7 +3,7 @@ from collections import defaultdict
 from model import ExpenseSplits
 from sqlalchemy.orm import selectinload
 
-async def generate_expense_groups(expense_ids, db, wantSorted):
+async def get_expense_groups(expense_ids, db, wantSorted):
     # gettings all splits of all expense ids at once
     result = await db.execute(
         select(ExpenseSplits)
