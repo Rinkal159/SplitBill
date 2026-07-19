@@ -21,13 +21,13 @@ def validate_fields(expense, participant_ids, current_user):
     )
 
     # ^ splits validation
-    if expense.split_method == "equal" and expense.splits is not None:
+    if expense.split_method == "equal" and expense.expense_splits is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Equal splits does not require split values",
         )
 
-    if expense.split_method in {"amount", "percentage"} and expense.splits is None:
+    if expense.split_method in {"amount", "percentage"} and expense.expense_splits is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Amount and percentage splits require split values",
@@ -35,7 +35,7 @@ def validate_fields(expense, participant_ids, current_user):
 
     if expense.split_method == "amount":
         validate_payments_and_splits(
-            items=expense.splits,
+            items=expense.expense_splits,
             participant_ids=participant_ids,
             total_amount=expense.total_amount,
             item_name="split",
@@ -43,7 +43,7 @@ def validate_fields(expense, participant_ids, current_user):
         )
     elif expense.split_method == "percentage":
         validate_payments_and_splits(
-            items=expense.splits,
+            items=expense.expense_splits,
             participant_ids=participant_ids,
             total_amount=Decimal("100"),
             item_name="split",
