@@ -47,6 +47,7 @@ class ExpenseCreateResponse(Base):
 
 # * ExpenseResponse
 class ExpenseDetail(Base):
+    id: int
     title: str
     total_amount: Decimal
     expense_date: date
