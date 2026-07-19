@@ -1,12 +1,23 @@
 from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy import String, DateTime, UniqueConstraint, func, ForeignKey, Index, text, Numeric, Date
+from sqlalchemy import (
+    String,
+    DateTime,
+    UniqueConstraint,
+    func,
+    ForeignKey,
+    Index,
+    text,
+    Numeric,
+    Date,
+    Enum as SQLAlchemyEnum,
+)
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
 from env_config import settings
 from datetime import datetime, date
-from fastapi import FastAPI
 import asyncio
 from cloudinary.utils import cloudinary_url
 from decimal import Decimal
+from enum import Enum
 
 engine = create_async_engine(settings.postgres_url)
 
@@ -105,7 +116,7 @@ class User(Base):
         lazy="selectin",
     )
 
-    # all the settlements where you're "payer"
+    # settlements where you're "payer"
     as_payer: Mapped[list["Settlement"]] = relationship(
         "Settlement",
         foreign_keys="Settlement.from_user",
@@ -114,7 +125,7 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
-    # all the settlements where you're "receiver"
+    # settlements where you're "receiver"
     as_receiver: Mapped[list["Settlement"]] = relationship(
         "Settlement",
         foreign_keys="Settlement.to_user",
@@ -186,6 +197,7 @@ class Expense(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    # who has created expense
     creator: Mapped["User"] = relationship(
         "User",
         foreign_keys=[created_by],
@@ -193,6 +205,7 @@ class Expense(Base):
         lazy="selectin",
     )
 
+    # all the expense splits of this expense
     expense_splits: Mapped[list["ExpenseSplits"]] = relationship(
         "ExpenseSplits",
         foreign_keys="ExpenseSplits.expense_id",
@@ -201,6 +214,7 @@ class Expense(Base):
         cascade="all, delete-orphan",
     )
 
+    # all the settlements done for this expense - for "expensewise"
     settlements: Mapped[list["Settlement"]] = relationship(
         "Settlement",
         foreign_keys="Settlement.expense_id",
@@ -249,6 +263,7 @@ class ExpenseSplits(Base):
     )
 
 
+# Settlemet and SettlementHistory
 class Settlement(Base):
     __tablename__ = "settlements"
 
@@ -263,7 +278,7 @@ class Settlement(Base):
         ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
-    settled_at: Mapped[date] = mapped_column(Date)
+    settlement_date: Mapped[date] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -303,19 +318,20 @@ class Settlement(Base):
 
 class SettlementSplits(Base):
     __tablename__ = "settlement_splits"
-    
-    __table_args__ = (
-        UniqueConstraint("settlement_id", "split_id"),
-    )
+
+    __table_args__ = (UniqueConstraint("settlement_id", "split_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     settlement_id: Mapped[int] = mapped_column(
         ForeignKey("settlements.id", onupdate="CASCADE", ondelete="CASCADE"), index=True
     )
     split_id: Mapped[int] = mapped_column(
-        ForeignKey("expense_splits.id", onupdate="CASCADE", ondelete="CASCADE"), index=True
+        ForeignKey("expense_splits.id", onupdate="CASCADE", ondelete="CASCADE"),
+        index=True,
     )
-    amount_settled: Mapped[Decimal] = mapped_column(Numeric(10, 2))  # part of that split amount
+    amount_settled: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2)
+    )  # part of that split amount
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -334,6 +350,27 @@ class SettlementSplits(Base):
         foreign_keys=[split_id],
         back_populates="settlement_splits",
         lazy="selectin",
+    )
+
+
+# new thing to remember - how to create enums in sqlalchemy
+class HistoryAction(str, Enum):
+    CREATED = "CREATED"
+    UPDATED = "UPDATED"
+    DELETED = "DELETED"
+
+
+class ExpenseHistory(Base):
+    __tablename__ = "expense_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    expense_id: Mapped[int] = mapped_column()
+    action: Mapped[HistoryAction] = mapped_column(  # create enum
+        SQLAlchemyEnum(HistoryAction)
+    )
+    performed_by: Mapped[int] = mapped_column()
+    performed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )
 
 
