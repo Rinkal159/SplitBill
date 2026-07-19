@@ -20,7 +20,7 @@ from schemas.expense_schema import (
     FriendsSettlementsResponse as FriendsSettlementsResponseSchema,
     UserDetail as UserDetailSchema,
 )
-from model import Expense, ExpenseSplits, Friends
+from model import Expense, ExpenseSplits, Friends, ExpenseHistory
 
 expense_router = APIRouter(prefix="/api/expenses", tags=["Expenses"])
 
@@ -38,7 +38,7 @@ async def add_expense_api(
     # validate participnats, payments and splits
     validate_fields(expense, participant_ids, current_user)
 
-    # creating a new expense
+    # creating new expense
     new_expense = Expense(
         title=expense.title,
         description=expense.description,
@@ -48,8 +48,16 @@ async def add_expense_api(
         created_by=current_user.id,
     )
     db.add(new_expense)
-
     await db.flush()
+    
+    # creating expense history
+    new_expense_history = ExpenseHistory(
+        expense_id=new_expense.id,
+        action="CREATED",
+        performed_by=current_user.id
+    )
+    db.add(new_expense_history)
+
 
     try:
         # creating splits of that expense
@@ -321,6 +329,14 @@ async def delete_expense_api(
             detail="You're not authorized to perform requested action",
         )
 
+    # creating expense history
+    new_expense_history = ExpenseHistory(
+        expense_id=expense_id,
+        action="DELETED",
+        performed_by=current_user.id
+    )
+    db.add(new_expense_history)
+
     await db.delete(existed_expense)
     await db.commit()
 
@@ -361,6 +377,14 @@ async def update_expense_api(
     existed_expense.note = expense.note  # type: ignore[call-args]
     existed_expense.total_amount = expense.total_amount
     existed_expense.expense_date = expense.expense_date
+    
+    # creating expense history
+    new_expense_history = ExpenseHistory(
+        expense_id=existed_expense.id,
+        action="UPDATED",
+        performed_by=current_user.id
+    )
+    db.add(new_expense_history)
 
     try:
         # deleting previous splits of that expense
