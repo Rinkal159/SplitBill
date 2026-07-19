@@ -6,10 +6,11 @@ from auth.authentication import get_current_user
 from decimal import Decimal
 from sqlalchemy.orm import selectinload
 from utils.get_creditors_debtors import get_creditors_debtors
-from utils.get_expense_groups import generate_expense_groups
+from utils.get_expense_groups import get_expense_groups
 from utils.validate_fields import validate_fields
 from utils.create_splits_of_expense import create_expense_splits
 from utils.get_friend_settlement_data import get_friend_settlement_data
+from utils.get_settlement_groups import get_settlement_groups
 
 from schemas.expense_schema import (
     ExpenseCreate as ExpenseCreateSchema,
@@ -85,18 +86,19 @@ async def get_all_expenses(
     expense_ids = result.scalars().all()
 
     # sorted in descending order of expense date
-    expense_groups = await generate_expense_groups(
+    expense_groups = await get_expense_groups(
         expense_ids=expense_ids, db=db, wantSorted=True
     )
 
     settlements = []
 
     for splits in expense_groups:
+        settlement_groups = await get_settlement_groups(splits, db)
         expense = splits[0].expense
 
         creditors = []
         debtors = []
-        get_creditors_debtors(splits, creditors, debtors)
+        get_creditors_debtors(splits, creditors, debtors, settlement_groups)
 
         i = 0  # creditor
         j = 0  # debtor
@@ -147,7 +149,7 @@ async def get_all_expenses(
             if creditor["balance"] <= Decimal("0"):
                 i += 1
 
-            if debtor["balance"] <= Decimal("0"):
+            if abs(debtor["balance"]) <= Decimal("0"):
                 j += 1
 
         settlements.append(
@@ -174,16 +176,18 @@ async def get_all_borrowing_lentings_api(
     )
     expense_ids = result.scalars().all()
 
-    expense_groups = await generate_expense_groups(
+    expense_groups = await get_expense_groups(
         expense_ids=expense_ids, db=db, wantSorted=True
     )
 
     general_balance = {}
 
     for splits in expense_groups:
+        settlement_groups = await get_settlement_groups(splits, db)
+
         creditors = []
         debtors = []
-        get_creditors_debtors(splits, creditors, debtors)
+        get_creditors_debtors(splits, creditors, debtors, settlement_groups)
 
         i = 0  # creditor
         j = 0  # debtor
@@ -230,7 +234,7 @@ async def get_all_borrowing_lentings_api(
             if creditor["balance"] <= Decimal("0"):
                 i += 1
 
-            if debtor["balance"] <= Decimal("0"):
+            if abs(debtor["balance"]) <= Decimal("0"):
                 j += 1
 
     borrowings = []
@@ -268,6 +272,28 @@ async def get_friends_settlements_api(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
+    # friend_id is not your friend
+    result = await db.execute(
+        select(Friends)
+        .options(selectinload(Friends.friend), selectinload(Friends.user))
+        .where(
+            or_(
+                and_(
+                    Friends.user_id == current_user.id, Friends.friend_id == friend_id
+                ),
+                and_(
+                    Friends.user_id == friend_id, Friends.friend_id == current_user.id
+                ),
+            )
+        )
+    )
+    existed_friendship = result.scalars().one_or_none()
+    if not existed_friendship:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot fetch expenses with non-friend",
+        )
+    
     return await get_friend_settlement_data(
         friend_id=friend_id, db=db, current_user=current_user
     )
