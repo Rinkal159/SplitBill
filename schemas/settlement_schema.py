@@ -12,7 +12,7 @@ class Base(BaseModel):
 class SettlementBase(Base):
     to_user: int
     amount: Annotated[Decimal, Field(gt=0)]
-    settled_at: date
+    settlement_date: date
 
 
 class ExpenseWiseSettlementCreate(SettlementBase):
