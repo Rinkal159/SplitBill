@@ -105,7 +105,7 @@ async def create_settlement_expensewise_api(
                     from_user=current_user.id,
                     to_user=settlement.to_user,
                     amount=settlement_amount,
-                    settled_at=settlement.settled_at,
+                    settled_date=settlement.settlement_date,
                 )
                 db.add(new_settlement)
                 await db.flush()
@@ -180,7 +180,7 @@ async def create_settlement_overall_api(
         from_user=current_user.id,
         to_user=settlement.to_user,
         amount=settlement_amount,
-        settled_at=settlement.settled_at,
+        settlement_date=settlement.settlement_date,
     )
 
     db.add(new_settlement)
