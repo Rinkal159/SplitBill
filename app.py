@@ -1,5 +1,11 @@
 from fastapi import FastAPI
-from routers import auth_routers, friends_routers, expense_routers, settlements_routers, history_routers
+from routers import (
+    auth_routers,
+    friends_routers,
+    expense_routers,
+    settlements_routers,
+    history_routers,
+)
 from exception_handling.exception_handlers import handlers
 
 app = FastAPI()
@@ -13,4 +19,3 @@ app.include_router(history_routers.history_router)
 
 # exception handling
 handlers(app)
-
