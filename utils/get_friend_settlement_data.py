@@ -4,67 +4,56 @@ from fastapi import Depends, HTTPException, status
 from database import get_db
 from auth.authentication import get_current_user
 from sqlalchemy.orm import selectinload
-from utils.get_expense_groups import generate_expense_groups
+from utils.get_expense_groups import get_expense_groups
 from utils.get_creditors_debtors import get_creditors_debtors
 from decimal import Decimal
+from utils.get_settlement_groups import get_settlement_groups
 
-from model import Friends, ExpenseSplits
+from model import Friends, ExpenseSplits, User
 
+
+# need to think, this is specifically for friends so both users must have friendhsip to get balances
 async def get_friend_settlement_data(
     friend_id: int,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
 
-    # friend_id is not your friend
-    result = await db.execute(
-        select(Friends)
-        .options(selectinload(Friends.friend), selectinload(Friends.user))
-        .where(
-            or_(
-                and_(
-                    Friends.user_id == current_user.id, Friends.friend_id == friend_id
-                ),
-                and_(
-                    Friends.user_id == friend_id, Friends.friend_id == current_user.id
-                ),
-            )
-        )
-    )
-    existed_friendship = result.scalars().one_or_none()
-    if not existed_friendship:
+    result = await db.execute(select(User).where(User.id == friend_id))
+    friend = result.scalars().one_or_none()
+
+    if not friend:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot fetch expenses with non-friend",
+            status_code=status.HTTP_404_NOT_FOUND, detail="Friend does not exist"
         )
 
-    friend = (
-        existed_friendship.friend
-        if existed_friendship.user.id == current_user.id
-        else existed_friendship.user
+    your_expenses = select(ExpenseSplits.expense_id).where(
+        ExpenseSplits.user_id == current_user.id
     )
-
-    your_expenses = select(ExpenseSplits.expense_id).where(ExpenseSplits.user_id == current_user.id)
 
     expenses_you_and_friend_involved = await db.execute(
         select(ExpenseSplits.expense_id).where(
-            ExpenseSplits.user_id == friend_id, ExpenseSplits.expense_id.in_(your_expenses)
+            ExpenseSplits.user_id == friend_id,
+            ExpenseSplits.expense_id.in_(your_expenses),
         )
     )
 
     expense_ids = expenses_you_and_friend_involved.scalars().all()
 
-    expense_groups = await generate_expense_groups(expense_ids=expense_ids, db=db, wantSorted=True)
+    expense_groups = await get_expense_groups(
+        expense_ids=expense_ids, db=db, wantSorted=True
+    )
 
     settlements = []
     total_balance = Decimal("0")
 
     for splits in expense_groups:
+        settlement_groups = await get_settlement_groups(splits, db)
         expense = splits[0].expense
 
         creditors = []
         debtors = []
-        get_creditors_debtors(splits, creditors, debtors)
+        get_creditors_debtors(splits, creditors, debtors, settlement_groups)
 
         i = 0  # creditor
         j = 0  # debtor
@@ -102,7 +91,7 @@ async def get_friend_settlement_data(
             if creditor["balance"] <= Decimal("0"):
                 i += 1
 
-            if debtor["balance"] <= Decimal("0"):
+            if abs(debtor["balance"]) <= Decimal("0"):
                 j += 1
 
         settlements.append({"expense": expense, "settlement": settlement})
