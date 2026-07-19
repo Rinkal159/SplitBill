@@ -278,12 +278,12 @@ class Settlement(Base):
 
     # payer
     payer: Mapped["User"] = relationship(
-        "Users", foreign_keys=[from_user], back_populates="as_payer", lazy="selectin"
+        "User", foreign_keys=[from_user], back_populates="as_payer", lazy="selectin"
     )
 
     # receiver
     receiver: Mapped["User"] = relationship(
-        "Users", foreign_keys=[to_user], back_populates="as_receiver", lazy="selectin"
+        "User", foreign_keys=[to_user], back_populates="as_receiver", lazy="selectin"
     )
 
     # all the splits of this settlement
