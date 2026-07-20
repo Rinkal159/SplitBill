@@ -1,6 +1,5 @@
 * 1. POST - /api/expense - Create an expense
-    expense table data:
-
+*    PUT - /api/expense - Update an expense
     {
         "id": int
         "title": str
@@ -61,3 +60,43 @@
         ],
         "total_balance" : <calculates total balance, positive if you lent more than borrowed, and negative if you borrowed more than you lent>
     }
+
+
+* 5 POST - /api/settlements/expense - Settle expense wise - only "one" settled_splits
+    {
+        "message" : "Settled successfully!"
+        "settled_splits" : [
+            {
+                "expense" : <expense_details>,
+                "settled_amount" : <total amount which has settled>,
+                "remaining_debt" : <if still debt exist>
+            }
+        ]
+    }
+
+* 6 POST - /api/settlements/overall - Settle overally - one or more than one settled_splits
+    {
+        "message" : "Settled successfully!"
+        "settled_splits" : [
+            {
+                "expense" : <expense_details>,
+                "settled_amount" : <total amount which has settled>,
+                "remaining_debt" : <if still debt exist>
+            }
+        ]
+    }
+
+
+* 7 GET - /api/history/expense - Get history of expenses which has CREATED, UPDATED, or DELETED by you
+    [
+        {
+            "action" : <action> <expense_title>
+            "expense" : {
+                "title": <expense_title>
+                "description": <expense_description or null>
+                "total_amount": <expense_total_amount>
+                "expense_date": <expense_date>
+            },
+            "performed_at" : <timestamps when that action was performed>
+        }
+    ]
