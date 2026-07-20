@@ -39,4 +39,4 @@ class SettlementDetail(Base):
 
 class SettlementResponse(Base):
     message: str
-    settled_expenses: list[SettlementDetail]
+    settled_splits: list[SettlementDetail]
