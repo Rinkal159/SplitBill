@@ -102,10 +102,11 @@ async def create_settlement_expensewise_api(
 
                 # creating new settlement
                 new_settlement = Settlement(
+                    expense_id=settlement.expense_id,
                     from_user=current_user.id,
                     to_user=settlement.to_user,
                     amount=settlement_amount,
-                    settled_date=settlement.settlement_date,
+                    settlement_date=settlement.settlement_date,
                 )
                 db.add(new_settlement)
                 await db.flush()
@@ -142,7 +143,7 @@ async def create_settlement_expensewise_api(
         if settlement_amount == 0:
             break
 
-    return {"message": "Settled successfully!", "settled_expenses": settlements}
+    return {"message": "Settled successfully!", "settled_splits": settlements}
 
 
 # * settle up overally with a friend
@@ -252,4 +253,4 @@ async def create_settlement_overall_api(
 
     await db.commit()
 
-    return {"message": "Settled successfully!", "settled_expenses": settlements}
+    return {"message": "Settled successfully!", "settled_splits": settlements}
