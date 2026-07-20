@@ -365,6 +365,12 @@ class ExpenseHistory(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     expense_id: Mapped[int] = mapped_column()
+    
+    expense_title: Mapped[str] = mapped_column(String(100))
+    expense_description: Mapped[str] = mapped_column(String(1000), nullable=True)
+    expense_total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    expense_expense_date: Mapped[date] = mapped_column(Date)
+    
     action: Mapped[HistoryAction] = mapped_column(  # create enum
         SQLAlchemyEnum(HistoryAction)
     )
