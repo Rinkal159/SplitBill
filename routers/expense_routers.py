@@ -53,6 +53,10 @@ async def add_expense_api(
     # creating expense history
     new_expense_history = ExpenseHistory(
         expense_id=new_expense.id,
+        expense_title=new_expense.title,
+        expense_description=new_expense.description,
+        expense_total_amount=new_expense.total_amount,
+        expense_expense_date=new_expense.expense_date,
         action="CREATED",
         performed_by=current_user.id
     )
@@ -332,6 +336,10 @@ async def delete_expense_api(
     # creating expense history
     new_expense_history = ExpenseHistory(
         expense_id=expense_id,
+        expense_title=existed_expense.title,
+        expense_description=existed_expense.description,
+        expense_total_amount=existed_expense.total_amount,
+        expense_expense_date=existed_expense.expense_date,
         action="DELETED",
         performed_by=current_user.id
     )
@@ -381,6 +389,10 @@ async def update_expense_api(
     # creating expense history
     new_expense_history = ExpenseHistory(
         expense_id=existed_expense.id,
+        expense_title=existed_expense.title,
+        expense_description=existed_expense.description,
+        expense_total_amount=existed_expense.total_amount,
+        expense_expense_date=existed_expense.expense_date,
         action="UPDATED",
         performed_by=current_user.id
     )
