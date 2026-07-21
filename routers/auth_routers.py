@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_, and_
+from sqlalchemy import select, func, or_, and_, update, delete
 from utils.cloudinary import upload_picture_on_cloudinary
 from utils.hash_password import hash, verify
 from auth.authentication import create_token
@@ -13,7 +13,7 @@ from schemas.user_schema import (
     UserLogin as UserLoginSchema,
     UserResponse as UserResponseSchema
 )
-from model import User, Invitation
+from model import User, Invitation, FriendsHistory
 
 auth_router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
@@ -78,26 +78,29 @@ async def signup_api(
         )
     )
     existed_invitations = result.scalars().all()
+    
+    seen = set()
 
     # populate invitee_id with new_user's id
     for invitation in existed_invitations:
-        invitation.invitee_id = new_user.id
-
-    await db.flush()
-
-    seen = set()
-
-    # if received invitation from both email and mobile number from same inviter, then only keep one
-    for invitation in existed_invitations:
         if invitation.inviter_id in seen:
+            await db.execute(
+                delete(FriendsHistory)
+                .where(FriendsHistory.invitation_id == invitation.id)
+            )
             await db.delete(invitation)
+            continue
         else:
             seen.add(invitation.inviter_id)
+            invitation.invitee_id = new_user.id
+            await db.execute(
+                update(FriendsHistory)
+                .where(FriendsHistory.invitation_id == invitation.id)
+                .values(receiver_id = new_user.id)
+            )
 
     await db.commit()
     await db.refresh(new_user)
-
-    # message = f"{user.name}, you've been signup up successfully!"
 
     return new_user
 
