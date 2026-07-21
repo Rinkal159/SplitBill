@@ -30,7 +30,16 @@ class UserDetail(Base):
 
 class SettlementHistoryResponse(Base):
     type: str
-    to_user: UserDetail
+    action: str
+    user: UserDetail
     amount_settled: Decimal
     settlement_date: date
     expense: ExpenseDetail | None
+    
+    
+#* FriendsHistory
+class FriendsHistory(Base):
+    action: str
+    user: UserDetail | str
+    performed_by_me: bool
+    performed_at: datetime
