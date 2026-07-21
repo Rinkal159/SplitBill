@@ -2,7 +2,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from model import ExpenseSplits
 
 async def create_expense_splits(db, expense, participant_ids, expense_data):
-    # should "equally" pay
+        # should "equally" pay
         if expense.split_method == "equal":
             share = (expense.total_amount / Decimal(len(participant_ids))).quantize(
                 Decimal("0.01"), rounding=ROUND_HALF_UP
