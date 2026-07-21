@@ -354,7 +354,7 @@ class SettlementSplits(Base):
 
 
 # new thing to remember - how to create enums in sqlalchemy
-class HistoryAction(str, Enum):
+class ExpenseHistoryAction(str, Enum):
     CREATED = "CREATED"
     UPDATED = "UPDATED"
     DELETED = "DELETED"
@@ -371,14 +371,64 @@ class ExpenseHistory(Base):
     expense_total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     expense_expense_date: Mapped[date] = mapped_column(Date)
     
-    action: Mapped[HistoryAction] = mapped_column(  # create enum
-        SQLAlchemyEnum(HistoryAction)
+    action: Mapped[ExpenseHistoryAction] = mapped_column(  # create enum
+        SQLAlchemyEnum(ExpenseHistoryAction)
     )
     performed_by: Mapped[int] = mapped_column()
     performed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
+
+class FriendsHistoryAction(str, Enum):
+    REQUEST_SENT = "REQUEST_SENT"
+    REQUEST_ACCEPTED = "REQUEST_ACCEPTED" 
+    
+    
+class FriendsHistory(Base):
+    __tablename__ = "friends_history"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"))
+    receiver_id: Mapped[int] = mapped_column(ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"), nullable=True)
+
+    invitation_id: Mapped[int] = mapped_column(ForeignKey("invitations.id"))
+
+    guest_invitee: Mapped[str] = mapped_column(String(255), nullable=True)
+
+    action: Mapped[FriendsHistoryAction] = mapped_column(SQLAlchemyEnum(FriendsHistoryAction))
+    
+    performed_by: Mapped[int] = mapped_column(ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"))
+    performed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # who sent the request
+    sender: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[sender_id],
+        lazy="selectin"
+    )
+    
+    # who received the request
+    receiver: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[receiver_id],
+        lazy="selectin"
+    )
+
+    # invitation
+    invitation: Mapped["Invitation"] = relationship(
+        "Invitation",
+        foreign_keys=[invitation_id],
+        lazy="selectin"
+    )
+    
+    # who performed that action
+    performed_user: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[performed_by],
+        lazy="selectin"
+    )
+    
 
 # asynchronous way to create database tables
 async def create_tables():
