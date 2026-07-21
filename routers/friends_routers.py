@@ -11,7 +11,7 @@ from schemas.friends_schema import (
     InvitationUpdate as InvitationUpdateSchema,
     UserDetail as UserDetailSchema
 )
-from model import User, Invitation, Friends
+from model import User, Invitation, Friends, FriendsHistory
 
 friends_router = APIRouter(prefix="/api/friends", tags=["Friends"])
 
@@ -23,11 +23,11 @@ async def invite_friend_api(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    inivitation_method = "email" if invitation.email else "mobile_number"
-    inivitation_value = invitation.email or invitation.mobile_number
+    invitation_method = "email" if invitation.email else "mobile_number"
+    invitation_value = invitation.email or invitation.mobile_number
 
     result = await db.execute(
-        select(User).where(getattr(User, inivitation_method) == inivitation_value)
+        select(User).where(getattr(User, invitation_method) == invitation_value)
     )
     existed_invitee = result.scalars().one_or_none()
 
@@ -99,6 +99,7 @@ async def invite_friend_api(
             inviter_id=current_user.id, invitee_id=existed_invitee.id
         )
         db.add(new_invitation)
+        
 
     # if invitee is not registered
     else:
@@ -110,7 +111,7 @@ async def invite_friend_api(
         result = await db.execute(
             select(Invitation).where(
                 Invitation.inviter_id == current_user.id,
-                getattr(Invitation, invitation_method) == inivitation_value,
+                getattr(Invitation, invitation_method) == invitation_value,
                 Invitation.status == "pending",
             )
         )
@@ -119,13 +120,25 @@ async def invite_friend_api(
         if existed_invitation:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"You've already sent friend request to {inivitation_value}",
+                detail=f"You've already sent friend request to {invitation_value}",
             )
 
         new_invitation = Invitation(
-            inviter_id=current_user.id, **{invitation_method: inivitation_value}
+            inviter_id=current_user.id, **{invitation_method: invitation_value}
         )
         db.add(new_invitation)
+
+    await db.flush()
+
+    new_friend_history = FriendsHistory(
+        sender_id=current_user.id,
+        receiver_id=existed_invitee.id if existed_invitee else None,
+        invitation_id=new_invitation.id,
+        guest_invitee=None if existed_invitee else invitation_value,
+        action="REQUEST_SENT",
+        performed_by=current_user.id
+    )
+    db.add(new_friend_history)
 
     await db.commit()
 
@@ -182,6 +195,15 @@ async def action_on_invitation_api(
             friend_id=max(existed_invitation.inviter_id, existed_invitation.invitee_id),
         )
         db.add(new_friends)
+        
+        new_friend_history = FriendsHistory(
+            sender_id=existed_invitation.inviter_id,
+            receiver_id=current_user.id,
+            invitation_id=existed_invitation.id,
+            action="REQUEST_ACCEPTED",
+            performed_by=current_user.id
+        )
+        db.add(new_friend_history)
         
     # reject
     else:
