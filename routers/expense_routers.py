@@ -77,17 +77,14 @@ async def add_expense_api(
 
     except Exception:
         await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error spliting expense",
-        )
+        raise
 
     return new_expense
 
 
 # * get all expenses in which you're involved
 @expense_router.get("/", response_model=ExpenseResponseSchema)
-async def get_all_expenses(
+async def get_all_expenses_api(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
 
@@ -177,7 +174,7 @@ async def get_all_expenses(
 
 # * get all your borrowings and lendings
 @expense_router.get("/you", response_model=BorrowingsAndLendingsSchema)
-async def get_all_borrowing_lentings_api(
+async def get_all_borrowing_and_lendings_api(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
     # get all expenses in which you're involved
