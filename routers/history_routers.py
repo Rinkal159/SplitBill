@@ -1,19 +1,20 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from database import get_db
 from auth.authentication import get_current_user
 
-from model import ExpenseHistory, Settlement
+from model import ExpenseHistory, Settlement, FriendsHistory
 from schemas.history_schema import (
     ExpenseHistoryResponse as ExpenseHistoryResponseSchema,
     SettlementHistoryResponse as SettlementHistoryResponseSchema,
+    FriendsHistory as FriendsHistoryResponseSchema
 )
 
 history_router = APIRouter(prefix="/api/history", tags=["History"])
 
 
-# expense history
+#* expense history
 @history_router.get("/expenses", response_model=list[ExpenseHistoryResponseSchema])
 async def get_expense_history_api(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
@@ -43,14 +44,14 @@ async def get_expense_history_api(
     return actions
 
 
-# settlement history
+#* settlement history
 @history_router.get("/settlements", response_model=list[SettlementHistoryResponseSchema])
 async def get_settlement_history_api(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
     result = await db.execute(
         select(Settlement)
-        .where(Settlement.from_user == current_user.id)
+        .where(or_(Settlement.from_user == current_user.id, Settlement.to_user == current_user.id))
         .order_by(Settlement.created_at.desc())
     )
     existed_settlement_history = result.scalars().all()
@@ -61,7 +62,8 @@ async def get_settlement_history_api(
         settlements.append(
             {
                 "type": "Expensewise" if settlement.expense_id else "Overall",
-                "to_user": settlement.receiver,
+                "action" : "PAID" if settlement.from_user == current_user.id else "RECEIVED",
+                "user": settlement.receiver if settlement.from_user == current_user.id else settlement.payer,
                 "amount_settled": settlement.amount,
                 "settlement_date": settlement.settlement_date,
                 "expense": settlement.expense,
@@ -69,3 +71,38 @@ async def get_settlement_history_api(
         )
 
     return settlements
+
+
+#* friends history
+@history_router.get("/friends", response_model=list[FriendsHistoryResponseSchema])
+async def get_friends_history_api(
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
+):
+    result = await db.execute(
+        select(FriendsHistory)
+        .where(or_(FriendsHistory.sender_id == current_user.id, FriendsHistory.receiver_id == current_user.id))
+        .order_by(FriendsHistory.performed_at.desc())
+    )
+    existed_friends_history = result.scalars().all()
+
+    friends_history = []
+
+    for history in existed_friends_history:
+        
+        # if you're the sender then get receiver, and if you're the receiver then get sender
+        if history.sender_id == current_user.id:
+            user = history.receiver if history.receiver else history.guest_invitee
+        else:
+            user = history.sender
+        
+        
+        friends_history.append(
+            {
+                "action" : history.action.value,
+                "performed_by_me": history.performed_by == current_user.id,
+                "user": user,
+                "performed_at": history.performed_at
+            }
+        )
+
+    return friends_history
