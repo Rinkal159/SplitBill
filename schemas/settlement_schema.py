@@ -12,6 +12,12 @@ class Base(BaseModel):
 class SettlementBase(Base):
     to_user: int
     amount: Annotated[Decimal, Field(gt=0)]
+    payment_method: Annotated[str, Field(
+        max_length=30
+    )]
+    note: Annotated[str, Field(
+        max_length=1500
+    )]
     settlement_date: date
 
 
