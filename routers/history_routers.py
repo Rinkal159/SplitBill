@@ -99,8 +99,8 @@ async def get_friends_history_api(
         friends_history.append(
             {
                 "action" : history.action.value,
-                "performed_by_me": history.performed_by == current_user.id,
                 "user": user,
+                "performed_by_me": history.performed_by == current_user.id,
                 "performed_at": history.performed_at
             }
         )
