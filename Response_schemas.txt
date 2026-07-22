@@ -62,6 +62,9 @@
     }
 
 
+&-------------------------------------------------------------------------------------------------------------
+
+
 * 5 POST - /api/settlements/expense - Settle expense wise - only "one" settled_splits
     {
         "message" : "Settled successfully!"
@@ -87,7 +90,10 @@
     }
 
 
-* 7 GET - /api/history/expense - Get history of expenses which has CREATED, UPDATED, or DELETED by you
+&-------------------------------------------------------------------------------------------------------------
+
+
+* 7 GET - /api/history/expenses - Get history of expenses, CREATED, UPDATED, DELETED
     [
         {
             "action" : <action> <expense_title>
@@ -100,3 +106,46 @@
             "performed_at" : <timestamps when that action was performed>
         }
     ]
+
+* 8 GET - /api/history/settlements - Get history of settlepents- PAID, RECEIVED
+    [
+        {
+            "type" : <Expensewise or Overall>,
+            "action": <PAID or RECEIVED>,
+            "user": <you if you've received else the other user>,
+            "amount_settled": <total amoutn settled>,
+            "settledment_date": <settlement date>,
+            "expense": <fetches expense for which the settlement was done - only for Expensewise>
+        }
+    ]
+
+* 9 GET - /api/history/friends - Get history of friends- REQUEST_SENT, REQUEST_ACCEPTED
+    [
+        {
+            "action" : <REQUEST_SENT or REQUEST_ACCEPTED>
+            "user": <if you're the sender then get receiver, and if you're the receiver then get sender>,
+            "performed_by_me": <action was performed by you or not>,
+            "performed_at" : <timestamps when that action was performed>
+        }
+    ]
+
+
+&-------------------------------------------------------------------------------------------------------------
+
+
+* 10 GET - /api/activities - get activities
+    {
+        "activities" : [
+            {
+                "type" : <EXPENSE, SETTLEMENT or FRIENDS>,
+                "action": <CREATED, UPDATED, DELETE for EXPENSE; PAID, RECEIVED for SETTLEMENT; REQUEST_SENT, REQUEST_RECEIVED, REQUEST_ACCEPTED for FRIENDS>,
+                "user": <user who has performed that action, it's not necessary that current user has performed all the activities listed
+                    - in EXPENSE, maybe he's just part of expense
+                    - in SETTLEMENT, maybe he received the lendings
+                    - in FRIENDS, maybe he received the request or someone accepted his request>,
+                "performed_by_me": <action was performed by you or not>,
+                "performed_at": <timestamps when that action was performed>,
+                "amount_settled": <total amount settled - only for SETTLEMENT>
+            }
+        ]
+    }
