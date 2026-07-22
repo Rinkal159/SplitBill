@@ -227,14 +227,14 @@ async def create_settlement_overall_api(
                 settlement_amount -= amount_to_transfer
 
                 remaining_debt = (
-                    friend_settlement_data["total_balance"] + amount_to_transfer
+                    transfer - amount_to_transfer
                 )
                 settlements.append(
                     {
                         "expense": expense,
                         "settled_amount": amount_to_transfer,
                         "remaining_debt": (
-                            0 if remaining_debt > 0 else abs(remaining_debt)
+                            0 if remaining_debt <= 0 else remaining_debt
                         ),
                     }
                 )
