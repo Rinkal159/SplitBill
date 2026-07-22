@@ -145,7 +145,7 @@ class User(Base):
 class Invitation(Base):
     __tablename__ = "invitations"
 
-    # unique constraint on inviter_id, invitee_id ans pending status
+    # unique constraint on inviter_id, invitee_id and pending status
     __table_args__ = (
         Index(
             "unique_pending_invitation",

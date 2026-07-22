@@ -15,16 +15,19 @@
         "expenses": [
             {
                 "expense": <that_expense_details>,
-                "your_settlements": {
-                    "to_user": <borrowed_or_lent_user>,
-                    "balance": <negative if borrowed, positive if lent>
-                },
-                "other_settlements": {
-                    "from_user": <debtor_user>
-                    "to_user": <creditor_user>,
-                    "balance": <negative_balance>
-                },
-
+                "your_settlements": [
+                    {
+                        "to_user": <borrowed_or_lent_user>,
+                        "balance": <negative if borrowed, positive if lent>
+                    }
+                ]
+                "other_settlements": [
+                    {
+                        "from_user": <debtor_user>
+                        "to_user": <creditor_user>,
+                        "balance": <negative_balance>
+                    },
+                ]
             }
         ]
     }
