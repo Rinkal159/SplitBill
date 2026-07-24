@@ -11,96 +11,127 @@ from auth.authentication import get_current_user
 from schemas.user_schema import (
     UserCreate as UserCreateSchema,
     UserLogin as UserLoginSchema,
-    UserResponse as UserResponseSchema
+    UserResponse as UserResponseSchema,
 )
-from model import User, Invitation, FriendsHistory
+from model import (
+    User,
+    Invitation,
+    FriendsHistory,
+    GroupInvitation,
+    GroupInvitationStatus,
+)
 
 auth_router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 
 # * signup
-@auth_router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=UserResponseSchema)
+@auth_router.post(
+    "/signup", status_code=status.HTTP_201_CREATED, response_model=UserResponseSchema
+)
 async def signup_api(
     user: UserCreateSchema = Depends(UserCreateSchema.as_form),
     profilePicture: UploadFile | None = File(None),
     db: AsyncSession = Depends(get_db),
 ):
-    user.email = user.email.lower()
+    async with db.begin():
+        user.email = user.email.lower()
 
-    result = await db.execute(select(User).where(func.lower(User.email) == user.email))
-    existed_user = result.scalars().one_or_none()
-
-    # if user with same "email id" already exists
-    if existed_user:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User with same email already exists",
+        result = await db.execute(
+            select(User).where(func.lower(User.email) == user.email)
         )
+        existed_user = result.scalars().one_or_none()
 
-    result = await db.execute(
-        select(User).where(User.mobile_number == user.mobile_number)
-    )
-    existed_user = result.scalars().one_or_none()
+        # if user with same "email id" already exists
+        if existed_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User with same email already exists",
+            )
 
-    # if user with same "mobile number" already exists
-    if existed_user:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User with same mobile number already exists",
+        result = await db.execute(
+            select(User).where(User.mobile_number == user.mobile_number)
         )
+        existed_user = result.scalars().one_or_none()
 
-    user_dict = user.model_dump()
+        # if user with same "mobile number" already exists
+        if existed_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User with same mobile number already exists",
+            )
 
-    # store the profile picture in cloudinary and get the public id
-    if profilePicture:
-        if profilePicture.filename:
-            profile_picture_public_id = upload_picture_on_cloudinary(profilePicture)
-            user_dict["profile_picture"] = profile_picture_public_id
+        user_dict = user.model_dump()
 
-    # hash password
-    user_dict["password"] = hash(user.password)
+        # store the profile picture in cloudinary and get the public id
+        if profilePicture:
+            if profilePicture.filename:
+                profile_picture_public_id = upload_picture_on_cloudinary(profilePicture)
+                user_dict["profile_picture"] = profile_picture_public_id
 
-    new_user = User(**user_dict)
-    db.add(new_user)
-    
-    await db.flush()
+        # hash password
+        user_dict["password"] = hash(user.password)
 
-    # check pending invitations
-    result = await db.execute(
-        select(Invitation).where(
-            and_(
-                or_(
-                    Invitation.invitee_email == new_user.email,
-                    Invitation.invitee_mobile_number == new_user.mobile_number,
+        new_user = User(**user_dict)
+        db.add(new_user)
+
+        await db.flush()
+
+        # check pending friends invitations
+        result = await db.execute(
+            select(Invitation).where(
+                and_(
+                    or_(
+                        Invitation.invitee_email == new_user.email,
+                        Invitation.invitee_mobile_number == new_user.mobile_number,
+                    ),
+                    Invitation.status == "pending",
                 ),
-                Invitation.status == "pending",
-            ),
+            )
         )
-    )
-    existed_invitations = result.scalars().all()
-    
-    seen = set()
+        existed_invitations = result.scalars().all()
 
-    # populate invitee_id with new_user's id
-    for invitation in existed_invitations:
-        if invitation.inviter_id in seen:
-            await db.execute(
-                delete(FriendsHistory)
-                .where(FriendsHistory.invitation_id == invitation.id)
-            )
-            await db.delete(invitation)
-            continue
-        else:
-            seen.add(invitation.inviter_id)
-            invitation.invitee_id = new_user.id
-            await db.execute(
-                update(FriendsHistory)
-                .where(FriendsHistory.invitation_id == invitation.id)
-                .values(receiver_id = new_user.id)
-            )
+        seen = set()
 
-    await db.commit()
-    await db.refresh(new_user)
+        # populate invitee_id with new_user's id
+        for invitation in existed_invitations:
+            if invitation.inviter_id in seen:
+                await db.execute(
+                    delete(FriendsHistory).where(
+                        FriendsHistory.invitation_id == invitation.id
+                    )
+                )
+                await db.delete(invitation)
+                continue
+            else:
+                seen.add(invitation.inviter_id)
+                invitation.invitee_id = new_user.id
+                await db.execute(
+                    update(FriendsHistory)
+                    .where(FriendsHistory.invitation_id == invitation.id)
+                    .values(receiver_id=new_user.id)
+                )
+
+        # check pending group invitations
+        result = await db.execute(
+            select(GroupInvitation).where(
+                or_(
+                    GroupInvitation.invitee_email == new_user.email,
+                    GroupInvitation.invitee_mobile_number == new_user.mobile_number,
+                ),
+                GroupInvitation.status == GroupInvitationStatus.PENDING,
+            )
+        )
+        existed_group_invitations = result.scalars().all()
+
+        seen = set()
+        for invitation in existed_group_invitations:
+            if invitation.group_id in seen:
+                await db.delete(invitation)
+            else:
+                seen.add(invitation.group_id)
+                invitation.invitee_id = new_user.id
+
+        await db.refresh(new_user)
 
     return new_user
 
