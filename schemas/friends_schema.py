@@ -9,7 +9,7 @@ class Base(BaseModel):
 
 class InvitationCreate(Base):
     email: EmailStr | None = None
-    mobile_number: Annotated[str | None, Field(min_length=10, max_length=10)] = None
+    mobile_number: Annotated[str | None, Field(pattern=r"^\d{10}$")] = None
 
     @model_validator(mode="after")
     def validate_invite_method(self):
