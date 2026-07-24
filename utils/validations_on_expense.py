@@ -1,17 +1,26 @@
 from fastapi import HTTPException, status
 from decimal import Decimal
+from model import GroupMember
+from sqlalchemy import select
+from utils.validate_participants_are_group_members import are_group_members
 
 
-def validate_payments_and_splits(
-    participant_ids: set[int],
+async def validate_payments_and_splits(
+    group_id,
+    db,
     items,
+    participant_ids: set[int],
     total_amount: Decimal,
     item_name: str,
-    value_field: str,
+    value_field: str
 ):
-
-    # duplicate payments from same user_id
     user_ids = [item.user_id for item in items]
+    
+    # if it is a group expense, then check all the payers of expense and splits users are members of the group
+    if group_id is not None:
+        await are_group_members(db, group_id, user_ids)
+    
+    # duplicate payments from same user_id
     if len(user_ids) != len(set(user_ids)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
