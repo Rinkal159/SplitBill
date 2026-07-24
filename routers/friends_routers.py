@@ -161,7 +161,7 @@ async def get_invitations_api(
 
 
 # * accept or reject invitation
-@friends_router.post("/invitations/{invitation_id}")
+@friends_router.patch("/invitations/{invitation_id}")
 async def action_on_invitation_api(
     invitation_id: int,
     new_status: InvitationUpdateSchema,
