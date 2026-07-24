@@ -3,21 +3,25 @@ from utils.validations_on_expense import validate_payments_and_splits
 from fastapi import  HTTPException, status
 from decimal import Decimal
 
-def validate_fields(expense, participant_ids, current_user):
+async def validate_fields(group_id, db, expense, participant_ids, current_user):
     # ^ participants validation
-    validate_participants(
+    await validate_participants(
+        group_id=group_id,
+        db=db,
         participants_id_raw=expense.participants,
         participant_ids_set=participant_ids,
         current_user=current_user,
     )
 
     # ^ payments validation
-    validate_payments_and_splits(
+    await validate_payments_and_splits(
+        group_id=group_id,
+        db=db,
         items=expense.payments,
         participant_ids=participant_ids,
         total_amount=expense.total_amount,
         item_name="payment",
-        value_field="amount",
+        value_field="amount"
     )
 
     # ^ splits validation
@@ -34,7 +38,9 @@ def validate_fields(expense, participant_ids, current_user):
         )
 
     if expense.split_method == "amount":
-        validate_payments_and_splits(
+        await validate_payments_and_splits(
+            group_id=group_id,
+            db=db,
             items=expense.expense_splits,
             participant_ids=participant_ids,
             total_amount=expense.total_amount,
@@ -42,7 +48,9 @@ def validate_fields(expense, participant_ids, current_user):
             value_field="amount",
         )
     elif expense.split_method == "percentage":
-        validate_payments_and_splits(
+        await validate_payments_and_splits(
+            group_id=group_id,
+            db=db,
             items=expense.expense_splits,
             participant_ids=participant_ids,
             total_amount=Decimal("100"),
