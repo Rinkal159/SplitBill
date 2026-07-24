@@ -29,6 +29,10 @@ class OverallSettlementCreate(SettlementBase):
     pass
 
 
+class OverallSettlementGroupwiseCreate(SettlementBase):
+    group_id: int
+
+
 #* SettlementResponse
 class ExpenseDetail(Base):
     id: int
