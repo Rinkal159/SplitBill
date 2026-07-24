@@ -89,7 +89,7 @@ class User(Base):
         lazy="selectin",
     )
 
-    # invitations
+    # you 'sent' friend invitations
     invitations: Mapped[list["Invitation"]] = relationship(
         "Invitation",
         foreign_keys="Invitation.inviter_id",
@@ -134,6 +134,32 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
+    # groups you've created
+    groups_created: Mapped[list["Group"]] = relationship(
+        "Group",
+        foreign_keys="Group.created_by",
+        back_populates="creator",
+        lazy="selectin",
+    )
+
+    # groups in which you're a member
+    group_memberships: Mapped[list["GroupMember"]] = relationship(
+        "GroupMember",
+        foreign_keys="GroupMember.user_id",
+        back_populates="user",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+    # you 'sent' group invitations
+    group_invitations: Mapped[list["GroupInvitation"]] = relationship(
+        "GroupInvitation",
+        foreign_keys="GroupInvitation.inviter_id",
+        back_populates="inviter",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
     @property
     def profile_picture_path(self):
         if self.profile_picture:
@@ -148,7 +174,7 @@ class Invitation(Base):
     # unique constraint on inviter_id, invitee_id and pending status
     __table_args__ = (
         Index(
-            "unique_pending_invitation",
+            "unique_friends_pending_invitation",
             "inviter_id",
             "invitee_id",
             unique=True,
@@ -182,6 +208,7 @@ class Expense(Base):
     __tablename__ = "expenses"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(String(1000), nullable=True)
     note: Mapped[str] = mapped_column(String(1000), nullable=True)
@@ -205,7 +232,7 @@ class Expense(Base):
         lazy="selectin",
     )
 
-    # all the expense splits of this expense
+    # expense splits of this expense
     expense_splits: Mapped[list["ExpenseSplits"]] = relationship(
         "ExpenseSplits",
         foreign_keys="ExpenseSplits.expense_id",
@@ -214,13 +241,18 @@ class Expense(Base):
         cascade="all, delete-orphan",
     )
 
-    # all the settlements done for this expense - for "expensewise"
+    # settlements done for this expense - only for "expensewise"
     settlements: Mapped[list["Settlement"]] = relationship(
         "Settlement",
         foreign_keys="Settlement.expense_id",
         back_populates="expense",
         lazy="selectin",
         cascade="all, delete-orphan",
+    )
+
+    # which group has created this expense - only when group_id is not null
+    group: Mapped["Group"] = relationship(
+        "Group", foreign_keys=[group_id], back_populates="expenses", lazy="selectin"
     )
 
 
@@ -271,6 +303,7 @@ class Settlement(Base):
     expense_id: Mapped[int] = mapped_column(
         ForeignKey("expenses.id", onupdate="CASCADE", ondelete="CASCADE"), nullable=True
     )
+    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id"), nullable=True)
     from_user: Mapped[int] = mapped_column(
         ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
     )
@@ -291,6 +324,11 @@ class Settlement(Base):
         foreign_keys=[expense_id],
         back_populates="settlements",
         lazy="selectin",
+    )
+
+    # if user is settling up expensewise, and that expense was created by group, then which group
+    group: Mapped["Group"] = relationship(
+        "Group", foreign_keys=[group_id], back_populates="settlements", lazy="selectin"
     )
 
     # payer
@@ -367,12 +405,12 @@ class ExpenseHistory(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     expense_id: Mapped[int] = mapped_column()
-    
+
     expense_title: Mapped[str] = mapped_column(String(100))
     expense_description: Mapped[str] = mapped_column(String(1000), nullable=True)
     expense_total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     expense_expense_date: Mapped[date] = mapped_column(Date)
-    
+
     action: Mapped[ExpenseHistoryAction] = mapped_column(  # create enum
         SQLAlchemyEnum(ExpenseHistoryAction)
     )
@@ -384,53 +422,201 @@ class ExpenseHistory(Base):
 
 class FriendsHistoryAction(str, Enum):
     REQUEST_SENT = "REQUEST_SENT"
-    REQUEST_ACCEPTED = "REQUEST_ACCEPTED" 
-    
-    
+    REQUEST_ACCEPTED = "REQUEST_ACCEPTED"
+
+
 class FriendsHistory(Base):
     __tablename__ = "friends_history"
-    
+
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"))
-    receiver_id: Mapped[int] = mapped_column(ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"), nullable=True)
+    sender_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
+    )
+    receiver_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"), nullable=True
+    )
 
     invitation_id: Mapped[int] = mapped_column(ForeignKey("invitations.id"))
 
     guest_invitee: Mapped[str] = mapped_column(String(255), nullable=True)
 
-    action: Mapped[FriendsHistoryAction] = mapped_column(SQLAlchemyEnum(FriendsHistoryAction))
-    
-    performed_by: Mapped[int] = mapped_column(ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"))
-    performed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    action: Mapped[FriendsHistoryAction] = mapped_column(
+        SQLAlchemyEnum(FriendsHistoryAction)
+    )
+
+    performed_by: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
+    )
+    performed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # who sent the request
     sender: Mapped["User"] = relationship(
-        "User",
-        foreign_keys=[sender_id],
-        lazy="selectin"
+        "User", foreign_keys=[sender_id], lazy="selectin"
     )
-    
+
     # who received the request
     receiver: Mapped["User"] = relationship(
-        "User",
-        foreign_keys=[receiver_id],
-        lazy="selectin"
+        "User", foreign_keys=[receiver_id], lazy="selectin"
     )
 
     # invitation
     invitation: Mapped["Invitation"] = relationship(
-        "Invitation",
-        foreign_keys=[invitation_id],
-        lazy="selectin"
+        "Invitation", foreign_keys=[invitation_id], lazy="selectin"
     )
-    
+
     # who performed that action
     performed_user: Mapped["User"] = relationship(
-        "User",
-        foreign_keys=[performed_by],
-        lazy="selectin"
+        "User", foreign_keys=[performed_by], lazy="selectin"
     )
-    
+
+
+class Group(Base):
+    __tablename__ = "groups"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str] = mapped_column(String(1000), nullable=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    # who created this group
+    creator: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[created_by],
+        back_populates="groups_created",
+        lazy="selectin",
+    )
+
+    # members of group
+    members: Mapped[list["GroupMember"]] = relationship(
+        "GroupMember",
+        foreign_keys="GroupMember.group_id",
+        back_populates="group",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+    # expenses this group has created
+    expenses: Mapped[list["Expense"]] = relationship(
+        "Expense",
+        foreign_keys="Expense.group_id",
+        back_populates="group",
+        lazy="selectin",
+    )
+
+    # settlements this group has settled
+    settlements: Mapped[list["Settlement"]] = relationship(
+        "Settlement",
+        foreign_keys="Settlement.group_id",
+        back_populates="group",
+        lazy="selectin",
+    )
+
+    # invitations sent to join the group
+    invitations: Mapped[list["GroupInvitation"]] = relationship(
+        "GroupInvitation",
+        back_populates="group",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+
+class GroupMemberRole(str, Enum):
+    ADMIN = "ADMIN"
+    MEMBER = "MEMBER"
+
+
+class GroupMember(Base):
+    __tablename__ = "group_members"
+
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey("groups.id", onupdate="CASCADE", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"), primary_key=True
+    )
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    role: Mapped[GroupMemberRole] = mapped_column(
+        SQLAlchemyEnum(GroupMemberRole), default=GroupMemberRole.MEMBER
+    )
+
+    # this user is part of which group
+    group: Mapped["Group"] = relationship(
+        "Group", foreign_keys=[group_id], back_populates="members", lazy="selectin"
+    )
+
+    # who the user is
+    user: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[user_id],
+        back_populates="group_memberships",
+        lazy="selectin",
+    )
+
+
+class GroupInvitationStatus(str, Enum):
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+
+
+class GroupInvitation(Base):
+    __tablename__ = "group_invitations"
+
+    # unique constraint on inviter_id, invitee_id and pending status
+    __table_args__ = (
+        Index(
+            "unique_group_pending_invitation",
+            "group_id",
+            "inviter_id",
+            "invitee_id",
+            unique=True,
+            postgresql_where=text("status = 'PENDING'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey("groups.id", onupdate="CASCADE", ondelete="CASCADE")
+    )
+    inviter_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
+    )
+    invitee_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"), nullable=True
+    )
+    invitee_email: Mapped[str] = mapped_column(String(255), nullable=True)
+    invitee_mobile_number: Mapped[str] = mapped_column(String(10), nullable=True)
+    status: Mapped[GroupInvitationStatus] = mapped_column(
+        SQLAlchemyEnum(GroupInvitationStatus), default=GroupInvitationStatus.PENDING
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # this invitation is came from which group
+    group: Mapped["Group"] = relationship(
+        "Group", foreign_keys=[group_id], back_populates="invitations", lazy="selectin"
+    )
+
+    # inviter
+    inviter: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[inviter_id],
+        back_populates="group_invitations",
+        lazy="selectin",
+    )
+
 
 # asynchronous way to create database tables
 async def create_tables():
