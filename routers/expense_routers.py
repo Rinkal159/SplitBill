@@ -20,7 +20,7 @@ from schemas.expense_schema import (
     FriendsSettlementsResponse as FriendsSettlementsResponseSchema,
     UserDetail as UserDetailSchema,
 )
-from model import Expense, ExpenseSplits, Friends, ExpenseHistory
+from model import Expense, ExpenseSplits, Friends, ExpenseHistory, GroupMember, Group
 
 expense_router = APIRouter(prefix="/api/expenses", tags=["Expenses"])
 
@@ -34,12 +34,24 @@ async def add_expense_api(
 ):
 
     participant_ids = set(expense.participants)
-
+    
+    # if it is a group expense
+    if expense.group_id:
+        
+        # if group doesn't exist
+        result = await db.execute(select(Group).where(Group.id == expense.group_id))
+        existed_group = result.scalars().one_or_none()
+        
+        if not existed_group:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Group not found")
+        
+        
     # validate participnats, payments and splits
-    validate_fields(expense, participant_ids, current_user)
+    await validate_fields(expense.group_id, db, expense, participant_ids, current_user)
 
     # creating new expense
     new_expense = Expense(
+        group_id=expense.group_id,
         title=expense.title,
         description=expense.description,
         note=expense.note,
@@ -96,7 +108,7 @@ async def get_all_expenses_api(
 
     # sorted in descending order of expense date
     expense_groups = await get_expense_groups(
-        expense_ids=expense_ids, db=db, wantSorted=True
+        expense_ids=expense_ids, db=db, newest_first=True
     )
 
     settlements = []
@@ -186,7 +198,7 @@ async def get_all_borrowing_and_lendings_api(
     expense_ids = result.scalars().all()
 
     expense_groups = await get_expense_groups(
-        expense_ids=expense_ids, db=db, wantSorted=True
+        expense_ids=expense_ids, db=db, newest_first=True
     )
 
     general_balance = {}
@@ -371,10 +383,22 @@ async def update_expense_api(
             detail="You're not authorized to perform requested action",
         )
 
+
+    # if it is a group expense
+    if expense.group_id:
+        
+        # if group doesn't exist
+        result = await db.execute(select(Group).where(Group.id == expense.group_id))
+        existed_group = result.scalars().one_or_none()
+        
+        if not existed_group:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Group not found")
+        
+            
     participant_ids = set(expense.participants)
 
     # validate participnats, payments and splits
-    validate_fields(expense, participant_ids, current_user)
+    await validate_fields(expense.group_id, db, expense, participant_ids, current_user)
 
     # updating expense
     existed_expense.title = expense.title
