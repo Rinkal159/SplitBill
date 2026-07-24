@@ -21,6 +21,8 @@ class ExpenseSplitSchema(Base):
 
 
 class ExpenseCreate(Base):
+    group_id: int | None = None
+    
     title: Annotated[str, Field(min_length=1, max_length=100)]
     description: Annotated[str | None, Field(min_length=10, max_length=1000)] = None
     note: Annotated[str | None, Field(min_length=10, max_length=1000)] = None
@@ -35,8 +37,22 @@ class ExpenseCreate(Base):
     expense_splits: list[ExpenseSplitSchema] | None = None
     
     
+#* ExpenseCreateResponse
+class UserDetail(Base):
+    id: int
+    name: str
+    profile_picture: str
+
+    
+class GroupDetail(Base):
+    name: str
+    description: str | None
+    creator: UserDetail
+    
+    
 class ExpenseCreateResponse(Base):
     id: int
+    group: GroupDetail | None
     title: str
     description: str | None
     note: str | None
@@ -44,20 +60,14 @@ class ExpenseCreateResponse(Base):
     expense_date: date
     
 
-
 # * ExpenseResponse
 class ExpenseDetail(Base):
     id: int
+    group: GroupDetail | None
     title: str
     total_amount: Decimal
     expense_date: date
-
-
-class UserDetail(Base):
-    id: int
-    name: str
-    profile_picture: str
-
+    
 
 class YourSettlementSchema(Base):
     to_user: UserDetail
