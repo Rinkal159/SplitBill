@@ -3,16 +3,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from auth.authentication import get_current_user
 from utils.get_friend_settlement_data import get_friend_settlement_data
-from decimal import Decimal
-from utils.get_settlement_groups import get_settlement_groups
 from sqlalchemy import select
 from utils.get_expense_groups import get_expense_groups
 from utils.get_settlement_creditors_debtors import get_settlement_creditors_debtors
+from utils.get_member_settlement_data import get_member_settlement_data
+from decimal import Decimal
 
 from model import Expense, ExpenseSplits, Settlement, SettlementSplits
 from schemas.settlement_schema import (
     ExpenseWiseSettlementCreate as ExpenseWiseSettlementCreateSchema,
     OverallSettlementCreate as OverallSettlementCreateSchema,
+    OverallSettlementGroupwiseCreate as OverallSettlementGroupwiseCreateSchema,
     SettlementResponse as SettlementResponseSchema,
 )
 
@@ -21,7 +22,7 @@ settlements_router = APIRouter(prefix="/api/settlements", tags=["Settlements"])
 
 # * settle up expense wise
 @settlements_router.post("/expense", response_model=SettlementResponseSchema)
-async def create_settlement_expensewise_api(
+async def settle_up_expensewise_api(
     settlement: ExpenseWiseSettlementCreateSchema,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -62,7 +63,7 @@ async def create_settlement_expensewise_api(
     settlement_amount = settlement.amount
 
     expense_groups = await get_expense_groups(
-        [settlement.expense_id], db=db, wantSorted=False
+        [settlement.expense_id], db=db, newest_first=False
     )
 
     settlements = []
@@ -103,6 +104,7 @@ async def create_settlement_expensewise_api(
                 # creating new settlement
                 new_settlement = Settlement(
                     expense_id=settlement.expense_id,
+                    group_id=expense.group_id,
                     from_user=current_user.id,
                     to_user=settlement.to_user,
                     amount=settlement_amount,
@@ -150,111 +152,241 @@ async def create_settlement_expensewise_api(
 
 # * settle up overally with a friend
 @settlements_router.post("/overall", response_model=SettlementResponseSchema)
-async def create_settlement_overall_api(
+async def settle_up_friend_overall_api(
     settlement: OverallSettlementCreateSchema,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    if settlement.to_user == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot settle up with yourself",
-        )
 
-    friend_settlement_data = await get_friend_settlement_data(
-        friend_id=settlement.to_user, db=db, current_user=current_user
-    )
-
-    if friend_settlement_data["total_balance"] < 0:
-        if settlement.amount > abs(friend_settlement_data["total_balance"]):
+    try:
+        if settlement.to_user == current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Settlement amount cannot be greater than total debt",
+                detail="You cannot settle up with yourself",
             )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot settle up if you do not have borrowings",
+
+        friend_settlement_data = await get_friend_settlement_data(
+            friend_id=settlement.to_user, db=db, current_user=current_user
         )
 
-    settlement_amount = settlement.amount
+        if friend_settlement_data["total_balance"] < 0:
+            if settlement.amount > abs(friend_settlement_data["total_balance"]):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Settlement amount cannot be greater than total debt",
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You cannot settle up if you do not have borrowings",
+            )
 
-    new_settlement = Settlement(
-        from_user=current_user.id,
-        to_user=settlement.to_user,
-        amount=settlement_amount,
-        payment_method=settlement.payment_method,
-        note=settlement.note,
-        settlement_date=settlement.settlement_date,
-    )
+        settlement_amount = settlement.amount
 
-    db.add(new_settlement)
-    await db.flush()
-
-    settlements = []
-
-    for splits in friend_settlement_data["expense_groups"]:
-        expense = splits[0].expense
-
-        creditors = []
-        debtors = []
-        await get_settlement_creditors_debtors(
-            splits=splits, db=db, creditors=creditors, debtors=debtors
+        new_settlement = Settlement(
+            from_user=current_user.id,
+            to_user=settlement.to_user,
+            amount=settlement_amount,
+            payment_method=settlement.payment_method,
+            note=settlement.note,
+            settlement_date=settlement.settlement_date,
         )
 
-        i = 0
-        j = 0
+        db.add(new_settlement)
+        await db.flush()
 
-        while i < len(creditors) and j < len(debtors) and settlement_amount > 0:
-            creditor = creditors[i]
-            debtor = debtors[j]
 
-            creditor_balance = creditor["balance"]
-            debtor_balance = abs(debtor["balance"])
+        expense_groups = [
+            settlement["splits"]
+            for settlement in friend_settlement_data["settlements"]
+            if settlement["settlement"] < Decimal("0")
+        ]
 
-            transfer = min(creditor_balance, debtor_balance)
-            amount_to_transfer = transfer
+        settlements = []
+        
+        for splits in expense_groups:
+            expense = splits[0].expense
 
-            if (
-                debtor["user"].id == current_user.id
-                and creditor["user"].id == settlement.to_user
-            ):
-                amount_to_transfer = min(settlement_amount, transfer)
+            creditors = []
+            debtors = []
+            await get_settlement_creditors_debtors(
+                splits=splits, db=db, creditors=creditors, debtors=debtors
+            )
 
-                new_settlement_split = SettlementSplits(
-                    settlement_id=new_settlement.id,
-                    split_id=debtor["split_id"],
-                    amount_settled=amount_to_transfer,
-                )
-                db.add(new_settlement_split)
+            i = 0
+            j = 0
 
-                settlement_amount -= amount_to_transfer
+            while i < len(creditors) and j < len(debtors) and settlement_amount > 0:
+                creditor = creditors[i]
+                debtor = debtors[j]
 
-                remaining_debt = (
-                    transfer - amount_to_transfer
-                )
-                settlements.append(
-                    {
-                        "expense": expense,
-                        "settled_amount": amount_to_transfer,
-                        "remaining_debt": (
-                            0 if remaining_debt <= 0 else remaining_debt
-                        ),
-                    }
-                )
+                creditor_balance = creditor["balance"]
+                debtor_balance = abs(debtor["balance"])
 
-            creditor["balance"] -= amount_to_transfer
-            debtor["balance"] += amount_to_transfer
+                transfer = min(creditor_balance, debtor_balance)
+                amount_to_transfer = transfer
 
-            if creditor["balance"] <= 0:
-                i += 1
+                if (
+                    debtor["user"].id == current_user.id
+                    and creditor["user"].id == settlement.to_user
+                ):
+                    amount_to_transfer = min(settlement_amount, transfer)
 
-            if abs(debtor["balance"]) <= 0:
-                j += 1
+                    new_settlement_split = SettlementSplits(
+                        settlement_id=new_settlement.id,
+                        split_id=debtor["split_id"],
+                        amount_settled=amount_to_transfer,
+                    )
+                    db.add(new_settlement_split)
 
-        if settlement_amount <= 0:
-            break
+                    settlement_amount -= amount_to_transfer
 
-    await db.commit()
+                    remaining_debt_for_this_expense = transfer - amount_to_transfer
+                    settlements.append(
+                        {
+                            "expense": expense,
+                            "settled_amount": amount_to_transfer,
+                            "remaining_debt_for_this_expense": (
+                                0 if remaining_debt_for_this_expense <= 0 else remaining_debt_for_this_expense
+                            ),
+                        }
+                    )
+
+                creditor["balance"] -= amount_to_transfer
+                debtor["balance"] += amount_to_transfer
+
+                if creditor["balance"] <= 0:
+                    i += 1
+
+                if abs(debtor["balance"]) <= 0:
+                    j += 1
+
+            if settlement_amount <= 0:
+                break
+
+        await db.commit()
+    except:
+        await db.rollback()
+        raise
 
     return {"message": "Settled successfully!", "settled_splits": settlements}
+
+
+# * settle up overally group wise
+@settlements_router.post("/groups")
+async def settle_up_group_overall_api(
+    settlement: OverallSettlementGroupwiseCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        member_settlement_data = await get_member_settlement_data(
+            group_id=settlement.group_id,
+            user_id=settlement.to_user,
+            db=db,
+            current_user=current_user,
+        )
+
+        if member_settlement_data["total_balance"] >= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You cannot settle up if you do not have any borrowings",
+            )
+        else:
+            if settlement.amount > abs(member_settlement_data["total_balance"]):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="You cannot settle up beyond your debt",
+                )
+
+        settlement_amount = settlement.amount
+
+        new_settlement = Settlement(
+            group_id=settlement.group_id,
+            from_user=current_user.id,
+            to_user=settlement.to_user,
+            amount=settlement.amount,
+            payment_method=settlement.payment_method,
+            note=settlement.note,
+            settlement_date=settlement.settlement_date,
+        )
+
+        db.add(new_settlement)
+        await db.flush()
+
+        expense_groups = [
+            settlement["splits"]
+            for settlement in member_settlement_data["settlements"]
+            if settlement["settlement"] < Decimal("0")
+        ]
+
+        settlements = []
+
+        for splits in expense_groups:
+            expense = splits[0].expense
+
+            creditors = []
+            debtors = []
+            await get_settlement_creditors_debtors(
+                splits=splits, db=db, creditors=creditors, debtors=debtors
+            )
+
+            i = 0
+            j = 0
+
+            while i < len(creditors) and j < len(debtors) and settlement_amount > 0:
+                creditor = creditors[i]
+                debtor = debtors[j]
+
+                creditor_balance = creditor["balance"]
+                debtor_balance = abs(debtor["balance"])
+
+                transfer = min(creditor_balance, debtor_balance)
+                amount_to_transfer = transfer
+
+                if (
+                    debtor["user"].id == current_user.id
+                    and creditor["user"].id == settlement.to_user
+                ):
+                    amount_to_transfer = min(transfer, settlement_amount)
+
+                    new_settlement_split = SettlementSplits(
+                        settlement_id=new_settlement.id,
+                        split_id=debtor["split_id"],
+                        amount_settled=amount_to_transfer,
+                    )
+                    db.add(new_settlement_split)
+
+                    settlement_amount -= amount_to_transfer
+
+                    remianing_debt_for_this_expense = transfer - amount_to_transfer
+                    settlements.append(
+                        {
+                            "expense": expense,
+                            "amount_settled": amount_to_transfer,
+                            "remianing_debt_for_this_expense": (
+                                0
+                                if remianing_debt_for_this_expense <= 0
+                                else remianing_debt_for_this_expense
+                            ),
+                        }
+                    )
+
+                creditor["balance"] -= amount_to_transfer
+                debtor["balance"] += amount_to_transfer
+
+                if creditor["balance"] == Decimal("0"):
+                    i += 1
+
+                if debtor["balance"] == Decimal("0"):
+                    j += 1
+
+            if settlement_amount <= 0:
+                break
+
+        await db.commit()
+    except:
+        await db.rollback()
+        raise
+
+    return {"message": "Amount settled successfully!", "settled_splits": settlements}
