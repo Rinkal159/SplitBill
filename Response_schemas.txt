@@ -70,24 +70,36 @@
 
 * 5 POST - /api/settlements/expense - Settle expense wise - only "one" settled_splits
     {
-        "message" : "Settled successfully!"
+        "message" : "Amoutn settled successfully!"
         "settled_splits" : [
             {
                 "expense" : <expense_details>,
                 "settled_amount" : <total amount which has settled>,
-                "remaining_debt" : <if still debt exist>
+                "remaining_debt_for_this_expense" : <if still debt exist>
             }
         ]
     }
 
-* 6 POST - /api/settlements/overall - Settle overally - one or more than one settled_splits
+* 6 POST - /api/settlements/overall - Settle overally with a friend - one or more than one settled_splits
     {
-        "message" : "Settled successfully!"
+        "message" : "Amount settled successfully!"
         "settled_splits" : [
             {
                 "expense" : <expense_details>,
                 "settled_amount" : <total amount which has settled>,
-                "remaining_debt" : <if still debt exist>
+                "remaining_debt_for_this_expense" : <if still debt exist>
+            }
+        ]
+    }
+
+* 7 POST - /api/settlements/groups - Settle overally with a group member - one or more than one settled_splits
+    {
+        "message" : "Amount settled successfully!"
+        "settled_splits" : [
+            {
+                "expense" : <expense_details>,
+                "settled_amount" : <total amount which has settled>,
+                "remaining_debt_for_this_expense" : <if still debt exist>
             }
         ]
     }
