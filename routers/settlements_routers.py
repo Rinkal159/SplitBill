@@ -199,7 +199,7 @@ async def settle_up_friend_overall_api(
         expense_groups = [
             settlement["splits"]
             for settlement in friend_settlement_data["settlements"]
-            if settlement["settlement"] < Decimal("0")
+            if settlement["net_balance"] < Decimal("0")
         ]
 
         settlements = []
@@ -273,7 +273,7 @@ async def settle_up_friend_overall_api(
 
 
 # * settle up overally group wise
-@settlements_router.post("/groups")
+@settlements_router.post("/groups", response_model=SettlementResponseSchema)
 async def settle_up_group_overall_api(
     settlement: OverallSettlementGroupwiseCreateSchema,
     db: AsyncSession = Depends(get_db),
@@ -317,7 +317,7 @@ async def settle_up_group_overall_api(
         expense_groups = [
             settlement["splits"]
             for settlement in member_settlement_data["settlements"]
-            if settlement["settlement"] < Decimal("0")
+            if settlement["net_balance"] < Decimal("0")
         ]
 
         settlements = []
@@ -359,15 +359,15 @@ async def settle_up_group_overall_api(
 
                     settlement_amount -= amount_to_transfer
 
-                    remianing_debt_for_this_expense = transfer - amount_to_transfer
+                    remaining_debt_for_this_expense = transfer - amount_to_transfer
                     settlements.append(
                         {
                             "expense": expense,
-                            "amount_settled": amount_to_transfer,
-                            "remianing_debt_for_this_expense": (
+                            "settled_amount": amount_to_transfer,
+                            "remaining_debt_for_this_expense": (
                                 0
-                                if remianing_debt_for_this_expense <= 0
-                                else remianing_debt_for_this_expense
+                                if remaining_debt_for_this_expense <= 0
+                                else remaining_debt_for_this_expense
                             ),
                         }
                     )
