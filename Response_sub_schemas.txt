@@ -1,0 +1,28 @@
+* UserDetail
+id: int
+name: str
+profile_picture: str
+
+* ExpenseDetail 
+id: int
+group: GroupDetail | None
+title: str
+total_amount: Decimal
+settlement_date: date
+
+* GroupDetail
+id: int
+name: str
+description: str | None
+creator: UserDetail
+
+* GroupDetailWithMembers
+id: int
+name: str
+description: str | None
+creator: UserDetail
+members: list[GroupMembers]
+
+* GroupMembers
+user: UserDetail
+role: enum
