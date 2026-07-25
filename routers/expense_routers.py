@@ -11,6 +11,8 @@ from utils.validate_fields import validate_fields
 from utils.create_splits_of_expense import create_expense_splits
 from utils.get_friend_settlement_data import get_friend_settlement_data
 from utils.get_settlement_groups import get_settlement_groups
+from model import ExpenseHistoryAction
+
 
 from schemas.expense_schema import (
     ExpenseCreate as ExpenseCreateSchema,
@@ -65,11 +67,12 @@ async def add_expense_api(
     # creating expense history
     new_expense_history = ExpenseHistory(
         expense_id=new_expense.id,
+        group_id=new_expense.group_id,
         expense_title=new_expense.title,
         expense_description=new_expense.description,
         expense_total_amount=new_expense.total_amount,
         expense_expense_date=new_expense.expense_date,
-        action="CREATED",
+        action=ExpenseHistoryAction.CREATED,
         performed_by=current_user.id
     )
     db.add(new_expense_history)
