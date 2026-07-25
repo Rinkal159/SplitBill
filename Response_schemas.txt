@@ -14,17 +14,17 @@
     {
         "expenses": [
             {
-                "expense": <that_expense_details>,
+                "expense": <ExpenseDetail>,
                 "your_settlements": [
                     {
-                        "to_user": <borrowed_or_lent_user>,
+                        "to_user": <borrowed_or_lent_user - UserDetail>,
                         "balance": <negative if borrowed, positive if lent>
                     }
                 ]
                 "other_settlements": [
                     {
-                        "from_user": <debtor_user>
-                        "to_user": <creditor_user>,
+                        "from_user": <debtor_user - UserDetail>
+                        "to_user": <creditor_user - UserDetail>,
                         "balance": <negative_balance>
                     },
                 ]
@@ -39,13 +39,13 @@
         "total_lendings" : <total_lent_money>,
         "borrowings" : [
             {
-                "borrowed_from" : <user>,
+                "borrowed_from" : <UserDetail>,
                 "amount" : <total_amount_borrowed_from_this_user"
             }
         ],
         "lendings" : [
             {
-                "lent_to" : <user>,
+                "lent_to" : <UserDetail>,
                 "amount" : <total_amount_lent_to_this_user"
             }
         ]
@@ -54,11 +54,11 @@
 
 * 4. GET - /api/expenses/friends/{friend_id} - Get all the expenses where you and your friend is involved
     {
-        "friend" : <friend_details>,
+        "friend" : <UserDetail>,
         "settlements" : [
             {
-                "expense" : <expense_details>,
-                "settlement" : <positive balance if lent, negative balance if borrowed>
+                "expense" : <ExpenseDetail>,
+                "net_balance" : <positive balance if lent, negative balance if borrowed>
             }
         ],
         "total_balance" : <calculates total balance, positive if you lent more than borrowed, and negative if you borrowed more than you lent>
@@ -68,36 +68,36 @@
 &-------------------------------------------------------------------------------------------------------------
 
 
-* 5 POST - /api/settlements/expense - Settle expense wise - only "one" settled_splits
+* 5. POST - /api/settlements/expense - Settle expense wise - only "one" settled_splits
     {
-        "message" : "Amoutn settled successfully!"
+        "message" : "Amount settled successfully!"
         "settled_splits" : [
             {
-                "expense" : <expense_details>,
+                "expense" : <ExpenseDetail>,
                 "settled_amount" : <total amount which has settled>,
                 "remaining_debt_for_this_expense" : <if still debt exist>
             }
         ]
     }
 
-* 6 POST - /api/settlements/overall - Settle overally with a friend - one or more than one settled_splits
+* 6. POST - /api/settlements/overall - Settle overally with a friend - one or more than one settled_splits
     {
         "message" : "Amount settled successfully!"
         "settled_splits" : [
             {
-                "expense" : <expense_details>,
+                "expense" : <ExpenseDetail>,
                 "settled_amount" : <total amount which has settled>,
                 "remaining_debt_for_this_expense" : <if still debt exist>
             }
         ]
     }
 
-* 7 POST - /api/settlements/groups - Settle overally with a group member - one or more than one settled_splits
+* 7. POST - /api/settlements/groups - Settle overally with a group member - one or more than one settled_splits
     {
         "message" : "Amount settled successfully!"
         "settled_splits" : [
             {
-                "expense" : <expense_details>,
+                "expense" : <ExpenseDetail - includes groups details>,
                 "settled_amount" : <total amount which has settled>,
                 "remaining_debt_for_this_expense" : <if still debt exist>
             }
@@ -108,10 +108,10 @@
 &-------------------------------------------------------------------------------------------------------------
 
 
-* 7 GET - /api/history/expenses - Get history of expenses, CREATED, UPDATED, DELETED
+* 8. GET - /api/history/expenses - Get history of expenses, CREATED, UPDATED, DELETED
     [
         {
-            "action" : <action> <expense_title>
+            "action" : <action> <ExpenseDetail>
             "expense" : {
                 "title": <expense_title>
                 "description": <expense_description or null>
@@ -122,24 +122,24 @@
         }
     ]
 
-* 8 GET - /api/history/settlements - Get history of settlepents- PAID, RECEIVED
+* 9. GET - /api/history/settlements - Get history of settlepents- PAID, RECEIVED
     [
         {
             "type" : <Expensewise or Overall>,
             "action": <PAID or RECEIVED>,
-            "user": <you if you've received else the other user>,
+            "user": <you if you've received else the other user - UserDetail>,
             "amount_settled": <total amoutn settled>,
             "settledment_date": <settlement date>,
-            "expense": <fetches expense for which the settlement was done - only for Expensewise>
+            "expense": <fetches expense for which the settlement was done - only for Expensewise - ExpenseDetail>
         }
     ]
 
-* 9 GET - /api/history/friends - Get history of friends- REQUEST_SENT, REQUEST_ACCEPTED
+* 10. GET - /api/history/friends - Get history of friends- REQUEST_SENT, REQUEST_ACCEPTED
     [
         {
             "action" : <REQUEST_SENT or REQUEST_ACCEPTED>
-            "user": <if you're the sender then get receiver, and if you're the receiver then get sender>,
-            "performed_by_me": <action was performed by you or not>,
+            "user": <if you're the sender then get receiver, and if you're the receiver then get sender - UserDetail>,
+            "performed_by_me": <action was performed by you or not - True or False>,
             "performed_at" : <timestamps when that action was performed>
         }
     ]
@@ -148,7 +148,7 @@
 &-------------------------------------------------------------------------------------------------------------
 
 
-* 10 GET - /api/activities - get activities
+* 11. GET - /api/activities - get activities
     {
         "activities" : [
             {
@@ -157,10 +157,44 @@
                 "user": <user who has performed that action, it's not necessary that current user has performed all the activities listed
                     - in EXPENSE, maybe he's just part of expense
                     - in SETTLEMENT, maybe he received the lendings
-                    - in FRIENDS, maybe he received the request or someone accepted his request>,
-                "performed_by_me": <action was performed by you or not>,
+                    - in FRIENDS, maybe he received the request or someone accepted his request - UserDetail>,
+                "performed_by_me": <action was performed by you or not - True or False>,
                 "performed_at": <timestamps when that action was performed>,
                 "amount_settled": <total amount settled - only for SETTLEMENT>
             }
         ]
+    }
+
+
+&-------------------------------------------------------------------------------------------------------------
+
+* 12. GET - /api/groups/invitations - get groups invitations
+    [
+        {
+            "id": <id of invitation>,
+            "status": <PENDING>,
+            "group": <GroupDetail>,
+            "inviter": <UserDetail>
+        }
+    ]
+    
+* 13. GET - /api/groups - get groups in which you're a member or admin
+    [
+        {
+            "group": <GroupDetailWithMembers>,
+            "role: <your role - member or admin>,
+            "joined_at": <timestamps>
+        }
+    ]
+
+* 14. GET - /api/groups/member/{group_id}/{user_id} - Get all the "group expenses" where you and that member is involved
+    {
+        "member" : <UserDetail>,
+        "settlements" : [
+            {
+                "expense" : <ExpenseDetail>,
+                "net_balance" : <positive balance if lent, negative balance if borrowed>
+            }
+        ],
+        "total_balance" : <calculates total balance, positive if you lent more than borrowed, and negative if you borrowed more than you lent>
     }
