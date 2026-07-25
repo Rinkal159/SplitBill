@@ -13,10 +13,17 @@ class UserDetail(Base):
     profile_picture: str
 
 
+class GroupDetail(Base):
+    name: str
+    
+    
 class ActivitiesResponse(Base):
     type: str
+    group_name: GroupDetail | None
     action: str
-    user: UserDetail
+    performed_by: UserDetail
+    affected_user: UserDetail | None
+    affected_guest: str | None
     performed_by_me: bool
     performed_at: datetime
     amount_settled: Decimal | None
