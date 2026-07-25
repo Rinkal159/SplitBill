@@ -12,7 +12,9 @@ from model import (
     GroupMemberRole,
     User,
     GroupInvitation,
-    GroupInvitationStatus,
+    InvitationStatus,
+    GroupHistory,
+    GroupHistoryAction
 )
 from schemas.group_schema import (
     GroupCreate as GroupCreateSchema,
@@ -65,6 +67,13 @@ async def create_group_api(
 
         db.add(new_group)
         await db.flush()
+        
+        new_group_history = GroupHistory(
+            group_id=new_group.id,
+            action=GroupHistoryAction.GROUP_CREATED,
+            performed_by=current_user.id
+        )
+        db.add(new_group_history)
 
         # creating first group member - you as ADMIN
         new_group_member = GroupMember(
@@ -94,7 +103,7 @@ async def create_group_api(
             if mobile_number not in registered_mobile_numbers
         ]
 
-        # group invitations to registered invitees
+        # group invitations to "registered" invitees
         for existed in existed_invitees:
             if existed.id == current_user.id:
                 continue
@@ -103,15 +112,39 @@ async def create_group_api(
                 group_id=new_group.id, inviter_id=current_user.id, invitee_id=existed.id
             )
             db.add(new_group_invitation)
+            
+            await db.flush()
+            
+            new_group_history = GroupHistory(
+                group_id=new_group.id,
+                invitation_id=new_group_invitation.id,
+                sender_id=current_user.id,
+                receiver_id=existed.id,
+                action=GroupHistoryAction.GROUP_INVITATION_SENT,
+                performed_by=current_user.id
+            )
+            db.add(new_group_history)
 
-        # group invitations to non-registered invitees - email
+        # group invitations to "non-registered" invitees - email
         for email in non_registered_emails:
             new_group_invitation = GroupInvitation(
                 group_id=new_group.id, inviter_id=current_user.id, invitee_email=email
             )
             db.add(new_group_invitation)
+            
+            await db.flush()
+            
+            new_group_history = GroupHistory(
+                group_id=new_group.id,
+                invitation_id=new_group_invitation.id,
+                sender_id=current_user.id,
+                guest_invitee=email,
+                action=GroupHistoryAction.GROUP_INVITATION_SENT,
+                performed_by=current_user.id
+            )
+            db.add(new_group_history)
 
-        # group invitations to non-registered invitees - mobile_number
+        # group invitations to "non-registered" invitees - mobile_number
         for mobile_number in non_registered_mobile_numbers:
             new_group_invitation = GroupInvitation(
                 group_id=new_group.id,
@@ -119,7 +152,19 @@ async def create_group_api(
                 invitee_mobile_number=mobile_number,
             )
             db.add(new_group_invitation)
-
+            
+            await db.flush()
+            
+            new_group_history = GroupHistory(
+                group_id=new_group.id,
+                invitation_id=new_group_invitation.id,
+                sender_id=current_user.id,
+                guest_invitee=mobile_number,
+                action=GroupHistoryAction.GROUP_INVITATION_SENT,
+                performed_by=current_user.id
+            )
+            db.add(new_group_history)
+            
         await db.commit()
 
     except:
@@ -138,7 +183,7 @@ async def add_members_api(
     current_user=Depends(get_current_user),
 ):
     # if group doesn't exist
-    result = await db.execute(select(Group).where(Group.id == group_id))
+    result = await db.execute(select(Group).where(Group.id == group_id, Group.is_deleted == False))
     existed_group = result.scalars().one_or_none()
 
     if not existed_group:
@@ -199,7 +244,7 @@ async def add_members_api(
         result = await db.execute(
             select(GroupInvitation).where(
                 GroupInvitation.group_id == group_id,
-                GroupInvitation.status == GroupInvitationStatus.PENDING,
+                GroupInvitation.status == InvitationStatus.PENDING,
                 GroupInvitation.invitee_id == existed_invitee.id,
             )
         )
@@ -227,7 +272,7 @@ async def add_members_api(
         result = await db.execute(
             select(GroupInvitation).where(
                 GroupInvitation.group_id == group_id,
-                GroupInvitation.status == GroupInvitationStatus.PENDING,
+                GroupInvitation.status == InvitationStatus.PENDING,
                 getattr(GroupInvitation, invitation_method) == invitation_value,
             )
         )
@@ -246,6 +291,19 @@ async def add_members_api(
             **{invitation_method: invitation_value},
         )
         db.add(new_group_invitation)
+        
+    await db.flush()
+    
+    new_group_history = GroupHistory(
+        group_id=group_id,
+        invitation_id=new_group_invitation.id,
+        sender_id=current_user.id,
+        receiver_id=existed_invitee.id if existed_invitee else None,
+        guest_invitee=None if existed_invitee else invitation_value,
+        action=GroupHistoryAction.GROUP_INVITATION_SENT,
+        performed_by=current_user.id
+    )
+    db.add(new_group_history)
 
     await db.commit()
     return {"message": "Sent group invitation successfully!"}
@@ -257,9 +315,12 @@ async def get_group_invitations_api(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
     result = await db.execute(
-        select(GroupInvitation).where(
+        select(GroupInvitation)
+        .join(Group)
+        .where(
             GroupInvitation.invitee_id == current_user.id,
-            GroupInvitation.status == GroupInvitationStatus.PENDING,
+            GroupInvitation.status == InvitationStatus.PENDING,
+            Group.is_deleted.is_(False)
         )
     )
 
@@ -278,7 +339,12 @@ async def action_on_group_invitation_api(
 ):
     # if invitation doesn't exist
     result = await db.execute(
-        select(GroupInvitation).where(GroupInvitation.id == invitation_id)
+        select(GroupInvitation)
+        .join(Group)
+        .where(
+                GroupInvitation.id == invitation_id, 
+                Group.is_deleted.is_(False)
+        )
     )
     existed_invitation = result.scalars().one_or_none()
 
@@ -294,24 +360,35 @@ async def action_on_group_invitation_api(
         )
 
     # status is not PENDING
-    if existed_invitation.status != GroupInvitationStatus.PENDING:
+    if existed_invitation.status != InvitationStatus.PENDING:
         raise HTTPException(
             status_code=400, detail="This invitation has already been processed."
         )
 
     # accepts invitation
     if new_status.status == InvitationUpdateStatus.ACCEPTED:
-        existed_invitation.status = GroupInvitationStatus.ACCEPTED
+        existed_invitation.status = InvitationStatus.ACCEPTED
 
         # creating new group member
         new_group_member = GroupMember(
             group_id=existed_invitation.group_id, user_id=current_user.id
         )
         db.add(new_group_member)
+        
+        new_group_history = GroupHistory(
+            group_id=existed_invitation.group_id,
+            invitation_id=existed_invitation.id,
+            sender_id=existed_invitation.inviter_id,
+            receiver_id=current_user.id,
+            action=GroupHistoryAction.GROUP_INVITATION_ACCEPTED,
+            performed_by=current_user.id
+        )
+        db.add(new_group_history)
+        
 
     # rejects invitation
     else:
-        existed_invitation.status = GroupInvitationStatus.REJECTED
+        existed_invitation.status = InvitationStatus.REJECTED
 
     await db.commit()
 
@@ -325,7 +402,8 @@ async def get_groups(
 ):
     result = await db.execute(
         select(GroupMember)
-        .where(GroupMember.user_id == current_user.id)
+        .join(Group)
+        .where(GroupMember.user_id == current_user.id, Group.is_deleted.is_(False))
         .options(
             selectinload(GroupMember.group)
             .selectinload(Group.members)
