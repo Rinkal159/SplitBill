@@ -18,7 +18,7 @@ async def get_main_settlement_logic(expense_groups, db, you, other):
         i = 0  # creditor
         j = 0  # debtor
 
-        settlement = Decimal("0")
+        net_balance = Decimal("0")
 
         while i < len(creditors) and j < len(debtors):
             creditor = creditors[i]
@@ -31,12 +31,12 @@ async def get_main_settlement_logic(expense_groups, db, you, other):
 
             # you "lent" to friend
             if creditor["user"].id == you.id and debtor["user"].id == other:
-                settlement += transfer
+                net_balance += transfer
                 total_balance += transfer
 
             # you "borrowed" from friend
             elif debtor["user"].id == you.id and creditor["user"].id == other:
-                settlement += -transfer
+                net_balance += -transfer
                 total_balance -= transfer
 
             creditor["balance"] -= transfer
@@ -49,7 +49,7 @@ async def get_main_settlement_logic(expense_groups, db, you, other):
                 j += 1
 
         settlements.append(
-            {"expense": expense, "splits": splits, "settlement": settlement}
+            {"expense": expense, "splits": splits, "net_balance": net_balance}
         )
 
     return settlements, total_balance
