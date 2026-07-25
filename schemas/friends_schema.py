@@ -1,12 +1,14 @@
 from pydantic import BaseModel, Field, EmailStr, model_validator, ConfigDict
 from typing import Annotated
 from enum import Enum
+from model import InvitationStatus
 
 
 class Base(BaseModel):
     pass
 
 
+#* InvitationCreate
 class InvitationCreate(Base):
     email: EmailStr | None = None
     mobile_number: Annotated[str | None, Field(pattern=r"^\d{10}$")] = None
@@ -22,15 +24,17 @@ class InvitationCreate(Base):
         return self
 
 
-class InvitationStatus(str, Enum):
-    accepted = "accepted"
-    rejected = "rejected"
+#* InvitationUpdate
+class InvitationUpdateStatus(str, Enum):
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
 
 
 class InvitationUpdate(Base):
-    status: InvitationStatus
+    status: InvitationUpdateStatus
 
 
+#* InvitationResponse
 class UserDetail(Base):
     id: int
     name: str
@@ -43,7 +47,7 @@ class UserDetail(Base):
 
 class InvitationsResponse(Base):
     id: int
-    status: str
+    status: InvitationStatus
     inviter: UserDetail
 
     model_config = ConfigDict(from_attributes=True)
