@@ -7,11 +7,11 @@ from auth.authentication import get_current_user
 from schemas.friends_schema import (
     InvitationCreate as InvitationCreateSchema,
     InvitationsResponse as InvitationsResponseSchema,
-    InvitationStatus,
+    InvitationUpdateStatus as InvitationUpdateStatusSchema,
     InvitationUpdate as InvitationUpdateSchema,
     UserDetail as UserDetailSchema
 )
-from model import User, Invitation, Friends, FriendsHistory
+from model import User, Invitation, Friends, FriendsHistory, InvitationStatus
 
 friends_router = APIRouter(prefix="/api/friends", tags=["Friends"])
 
@@ -77,7 +77,7 @@ async def invite_friend_api(
                         Invitation.invitee_id == current_user.id,
                     ),
                 ),
-                Invitation.status == "pending",
+                Invitation.status == InvitationStatus.PENDING,
             )
         )
         existed_invitation = result.scalars().one_or_none()
@@ -112,7 +112,7 @@ async def invite_friend_api(
             select(Invitation).where(
                 Invitation.inviter_id == current_user.id,
                 getattr(Invitation, invitation_method) == invitation_value,
-                Invitation.status == "pending",
+                Invitation.status == InvitationStatus.PENDING,
             )
         )
         existed_invitation = result.scalars().one_or_none()
@@ -152,7 +152,7 @@ async def get_invitations_api(
 ):
     result = await db.execute(
         select(Invitation).where(
-            Invitation.invitee_id == current_user.id, Invitation.status == "pending"
+            Invitation.invitee_id == current_user.id, Invitation.status == InvitationStatus.PENDING
         )
     )
     existed_invitations = result.scalars().all()
@@ -180,7 +180,7 @@ async def action_on_invitation_api(
     # if you're not the invitee or the status is not pending
     if (
         existed_invitation.invitee_id != current_user.id
-        or existed_invitation.status != "pending"
+        or existed_invitation.status != InvitationStatus.PENDING
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -188,8 +188,8 @@ async def action_on_invitation_api(
         )
 
     # accept
-    if new_status.status == InvitationStatus.accepted:
-        existed_invitation.status = InvitationStatus.accepted
+    if new_status.status == InvitationUpdateStatusSchema.ACCEPTED:
+        existed_invitation.status = InvitationStatus.ACCEPTED
         new_friends = Friends(
             user_id=min(existed_invitation.inviter_id, existed_invitation.invitee_id),
             friend_id=max(existed_invitation.inviter_id, existed_invitation.invitee_id),
@@ -207,11 +207,11 @@ async def action_on_invitation_api(
         
     # reject
     else:
-        existed_invitation.status = InvitationStatus.rejected
+        existed_invitation.status = InvitationStatus.REJECTED
 
     await db.commit()
 
-    message = f"Invitation {new_status.status.value} successfully!"
+    message = f"Invitation {new_status.status.value.lower()} successfully!"
     return {"message": message}
 
 
