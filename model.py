@@ -10,6 +10,7 @@ from sqlalchemy import (
     Numeric,
     Date,
     Enum as SQLAlchemyEnum,
+    Boolean
 )
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
 from env_config import settings
@@ -159,6 +160,30 @@ class User(Base):
         lazy="selectin",
         cascade="all, delete-orphan",
     )
+    
+    # history of group invitation which you sent
+    group_invitations_as_inviter_history: Mapped[list["GroupHistory"]] = relationship(
+        "GroupHistory",
+        foreign_keys="GroupHistory.sender_id",
+        lazy="selectin",
+        back_populates="sender"
+    )
+    
+    # history of group invitation which you received
+    group_invitations_as_invitee_history: Mapped[list["GroupHistory"]] = relationship(
+        "GroupHistory",
+        foreign_keys="GroupHistory.receiver_id",
+        lazy="selectin",
+        back_populates="receiver"
+    )
+    
+    # history of all the action done by you in group
+    group_actions_history_performed_by_you: Mapped[list["GroupHistory"]] = relationship(
+        "GroupHistory",
+        foreign_keys="GroupHistory.performed_by",
+        lazy="selectin",
+        back_populates="performed_by_user"
+    )
 
     @property
     def profile_picture_path(self):
@@ -166,6 +191,12 @@ class User(Base):
             url, _ = cloudinary_url(self.profile_picture)
             return url
         return "/static/pictures/default.png"
+
+
+class InvitationStatus(str, Enum):
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
 
 
 class Invitation(Base):
@@ -178,7 +209,7 @@ class Invitation(Base):
             "inviter_id",
             "invitee_id",
             unique=True,
-            postgresql_where=text("status = 'pending'"),
+            postgresql_where=text("status = 'PENDING'"),
         ),
     )
 
@@ -191,7 +222,7 @@ class Invitation(Base):
     )
     invitee_email: Mapped[str] = mapped_column(String(255), nullable=True)
     invitee_mobile_number: Mapped[str] = mapped_column(String(10), nullable=True)
-    status: Mapped[str] = mapped_column(String(20), default="pending")
+    status: Mapped[InvitationStatus] = mapped_column(SQLAlchemyEnum(InvitationStatus), default=InvitationStatus.PENDING)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -311,7 +342,7 @@ class Settlement(Base):
         ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
-    payment_method: Mapped[str] = mapped_column(String(30))
+    payment_method: Mapped[str] = mapped_column(String(30), default="CASH")
     note: Mapped[str] = mapped_column(String(1500), nullable=True)
     settlement_date: Mapped[date] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(
@@ -405,6 +436,7 @@ class ExpenseHistory(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     expense_id: Mapped[int] = mapped_column()
+    group_id: Mapped[int] = mapped_column(nullable=True)
 
     expense_title: Mapped[str] = mapped_column(String(100))
     expense_description: Mapped[str] = mapped_column(String(1000), nullable=True)
@@ -482,6 +514,8 @@ class Group(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # who created this group
     creator: Mapped["User"] = relationship(
@@ -523,6 +557,14 @@ class Group(Base):
         lazy="selectin",
         cascade="all, delete-orphan",
     )
+    
+    # history of this group
+    group_history: Mapped[list["GroupHistory"]] = relationship(
+        "GroupHistory",
+        foreign_keys="GroupHistory.group_id",
+        lazy="selectin",
+        back_populates="group"
+    )
 
 
 class GroupMemberRole(str, Enum):
@@ -561,12 +603,6 @@ class GroupMember(Base):
     )
 
 
-class GroupInvitationStatus(str, Enum):
-    PENDING = "PENDING"
-    ACCEPTED = "ACCEPTED"
-    REJECTED = "REJECTED"
-
-
 class GroupInvitation(Base):
     __tablename__ = "group_invitations"
 
@@ -594,8 +630,8 @@ class GroupInvitation(Base):
     )
     invitee_email: Mapped[str] = mapped_column(String(255), nullable=True)
     invitee_mobile_number: Mapped[str] = mapped_column(String(10), nullable=True)
-    status: Mapped[GroupInvitationStatus] = mapped_column(
-        SQLAlchemyEnum(GroupInvitationStatus), default=GroupInvitationStatus.PENDING
+    status: Mapped[InvitationStatus] = mapped_column(
+        SQLAlchemyEnum(InvitationStatus), default=InvitationStatus.PENDING
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -616,6 +652,83 @@ class GroupInvitation(Base):
         back_populates="group_invitations",
         lazy="selectin",
     )
+    
+    # history of this invitation
+    history_of_invitation: Mapped[list["GroupHistory"]] = relationship(
+        "GroupHistory",
+        foreign_keys="GroupHistory.invitation_id",
+        lazy="selectin",
+        back_populates="invitation"
+    )
+
+
+class GroupHistoryAction(str, Enum):
+    GROUP_CREATED="GROUP_CREATED"
+    GROUP_INVITATION_SENT="GROUP_INVITATION_SENT"
+    GROUP_INVITATION_ACCEPTED="GROUP_INVITATION_ACCEPTED"
+    
+    
+class GroupHistory(Base):
+    __tablename__ = "group_history"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id"))
+    invitation_id: Mapped[int] = mapped_column(ForeignKey("group_invitations.id"), nullable=True)
+    
+    sender_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    receiver_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    guest_invitee: Mapped[str] = mapped_column(String(255), nullable=True)
+    
+    action: Mapped[GroupHistoryAction] = mapped_column(SQLAlchemyEnum(GroupHistoryAction))
+    performed_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    performed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    
+    # history belongs to which group
+    group: Mapped["Group"] = relationship(
+        "Group",
+        foreign_keys=[group_id],
+        lazy="selectin",
+        back_populates="group_history"
+    )
+    
+    # invitation
+    invitation: Mapped["GroupInvitation"] = relationship(
+        "GroupInvitation",
+        foreign_keys=[invitation_id],
+        lazy="selectin",
+        back_populates="history_of_invitation"
+    )
+    
+    # who sent the invitation
+    sender: Mapped["User"] = relationship(
+        "User", 
+        foreign_keys=[sender_id], 
+        lazy="selectin",
+        back_populates="group_invitations_as_inviter_history"
+    )
+
+    # who received the invitation
+    receiver: Mapped["User"] = relationship(
+        "User", 
+        foreign_keys=[receiver_id], 
+        lazy="selectin",
+        back_populates="group_invitations_as_invitee_history"
+    )
+    
+    # who performed that action
+    performed_by_user: Mapped["User"] = relationship(
+        "User", 
+        foreign_keys=[performed_by],
+        lazy="selectin",
+        back_populates="group_actions_history_performed_by_you"
+    )
+
 
 
 # asynchronous way to create database tables
