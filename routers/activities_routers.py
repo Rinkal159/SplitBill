@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, Query
 from auth.authentication import get_current_user
 from database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, literal, union_all, or_, cast, String, case, and_, func
+from sqlalchemy import select, literal, union_all, or_, cast, String, case, and_, func, union
 from typing import Annotated
+from sqlalchemy.orm import aliased
 
 from schemas.activities_schema import (
     PaginatedActivitiesResponse as PaginatedActivitiesResponseSchema,
@@ -14,7 +15,12 @@ from model import (
     FriendsHistory,
     ExpenseSplits,
     User,
-    FriendsHistoryAction,
+    Group,
+    GroupHistory,
+    GroupHistoryAction,
+    GroupMember,
+    GroupInvitation,
+    FriendsHistoryAction
 )
 
 activites_router = APIRouter(prefix="/api/activities", tags=["Activities"])
@@ -28,10 +34,28 @@ async def get_activities_api(
     page: int = 1,
     limit: Annotated[int, Query(gt=0, lt=100)] = 5,
 ):
+    # type
+    # group_id
+    # action
+
+    # performed_by
+    # affected_user
+    # affected_guest
+
+    # performed_by_me
+    # performed_at
+    # amount_settled
+
     expense_query = select(
-        literal("EXPENSE").label("type"),
+        case(
+            (ExpenseHistory.group_id == None, literal("EXPENSE")),
+            else_=literal("GROUP_EXPENSE"),
+        ).label("type"),
+        ExpenseHistory.group_id.label("group_id"),
         cast(ExpenseHistory.action, String).label("action"),
-        ExpenseHistory.performed_by.label("user"),
+        ExpenseHistory.performed_by.label("performed_by"),
+        literal(None).label("affected_user"),
+        literal(None).label("affected_guest"),
         case(
             (ExpenseHistory.performed_by == current_user.id, literal(True)),
             else_=literal(False),
@@ -47,15 +71,19 @@ async def get_activities_api(
     )
 
     settlement_query = select(
-        literal("SETTLEMENT").label("type"),
+        case(
+            (Settlement.expense_id != None, literal("EXPENSEWISE SETTLEMENT")),
+            (Settlement.group_id != None, literal("GROUPWISE SETTLEMENT")),
+            else_=literal("OVERALL SETTLEMENT"),
+        ).label("type"),
+        Settlement.group_id.label("group_id"),
         case(
             (Settlement.from_user == current_user.id, literal("PAID")),
             else_=literal("RECEIVED"),
         ).label("action"),
-        case(
-            (Settlement.from_user == current_user.id, Settlement.to_user),
-            else_=Settlement.from_user,
-        ).label("user"),
+        Settlement.from_user.label("performed_by"),
+        Settlement.to_user.label("affected_user"),
+        literal(None).label("affected_guest"),
         case(
             (Settlement.from_user == current_user.id, literal(True)),
             else_=literal(False),
@@ -71,20 +99,21 @@ async def get_activities_api(
 
     friends_query = select(
         literal("FRIENDS").label("type"),
+        literal(None).label("group_id"),
+        cast(FriendsHistory.action, String).label("action"),
+        FriendsHistory.performed_by.label("performed_by"),
         case(
             (
-                and_(
-                    FriendsHistory.action == FriendsHistoryAction.REQUEST_SENT,
-                    FriendsHistory.receiver_id == current_user.id,
-                ),
-                literal("REQUEST_RECEIVED"),
+                FriendsHistory.action == FriendsHistoryAction.REQUEST_SENT, FriendsHistory.receiver_id
             ),
-            else_=cast(FriendsHistory.action, String),
-        ).label("action"),
+            (
+                FriendsHistory.action == FriendsHistoryAction.REQUEST_ACCEPTED, FriendsHistory.sender_id
+            )
+        ).label("affected_user"),
         case(
-            (FriendsHistory.sender_id == current_user.id, FriendsHistory.receiver_id),
-            else_=FriendsHistory.sender_id,
-        ).label("user"),
+            (FriendsHistory.guest_invitee.is_not(None), FriendsHistory.guest_invitee),
+            else_=literal(None),
+        ).label("affected_guest"),
         case(
             (FriendsHistory.performed_by == current_user.id, literal(True)),
             else_=literal(False),
@@ -97,16 +126,71 @@ async def get_activities_api(
             FriendsHistory.receiver_id == current_user.id,
         )
     )
+    
+    group_query = select(
+        literal("GROUP").label("type"),
+        GroupHistory.group_id.label("group_id"),
+        cast(GroupHistory.action, String).label("action"),
+        
+        GroupHistory.performed_by.label("performed_by"),
+        case(
+            (
+                GroupHistory.action == GroupHistoryAction.GROUP_CREATED, literal(None)
+            ),
+            (
+                GroupHistory.action == GroupHistoryAction.GROUP_INVITATION_SENT, GroupHistory.receiver_id
+            ),
+            (
+                GroupHistory.action == GroupHistoryAction.GROUP_INVITATION_ACCEPTED, GroupHistory.sender_id
+            )
+        ).label("affected_user"),
+        case(
+            (
+                GroupHistory.guest_invitee.is_not(None), GroupHistory.guest_invitee    
+            ),
+            else_=literal(None),
+        ).label("affected_guest"),
+        
+        case(
+            (GroupHistory.performed_by == current_user.id, literal(True)),
+            else_=literal(False),
+        ).label("performed_by_me"),
+        GroupHistory.performed_at.label("performed_at"),
+        literal(None).label("amount_settled"),
+        
+    ).where(
+        or_(
+            # User is already a member
+            GroupHistory.group_id.in_(
+                select(GroupMember.group_id).where(
+                    GroupMember.user_id == current_user.id
+                )
+            ),
 
-    activities = union_all(expense_query, settlement_query, friends_query).subquery()
+            # User is NOT a member but was invited
+            and_(
+                GroupHistory.action == GroupHistoryAction.GROUP_INVITATION_SENT,
+                GroupHistory.receiver_id == current_user.id,
+            )
+        )
+    )
+
+    activities = union_all(
+        expense_query, settlement_query, friends_query, group_query
+    ).subquery()
 
     result = await db.execute(select(func.count()).select_from(activities))
     total_activities = result.scalar_one()
+    
+    PerformedBy = aliased(User, name="performed_by_user")
+    AffectedUser = aliased(User, name="affected_user_obj")
 
     skip = limit * (page - 1)
     result = await db.execute(
-        select(activities, User)
-        .join(User, User.id == activities.c.user)
+        select(activities, PerformedBy, AffectedUser, Group)
+        .outerjoin(PerformedBy, PerformedBy.id == activities.c.performed_by)
+        .outerjoin(AffectedUser, AffectedUser.id == activities.c.affected_user)
+        .outerjoin(Group, Group.id == activities.c.group_id)
         .order_by(activities.c.performed_at.desc())
         .offset(skip)
         .limit(limit)
@@ -118,8 +202,11 @@ async def get_activities_api(
         activities.append(
             {
                 "type": row["type"],
+                "group_name": row["Group"],
                 "action": row["action"],
-                "user": row["User"],
+                "performed_by": row["performed_by_user"],
+                "affected_user": row["affected_user_obj"],
+                "affected_guest": row["affected_guest"],
                 "performed_by_me": row["performed_by_me"],
                 "performed_at": row["performed_at"],
                 "amount_settled": row["amount_settled"],
