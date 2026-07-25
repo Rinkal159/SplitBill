@@ -12,12 +12,12 @@ class Base(BaseModel):
 class SettlementBase(Base):
     to_user: int
     amount: Annotated[Decimal, Field(gt=0)]
-    payment_method: Annotated[str, Field(
+    payment_method: Annotated[str | None, Field(
         max_length=30
-    )]
-    note: Annotated[str, Field(
+    )] = None
+    note: Annotated[str | None, Field(
         max_length=1500
-    )]
+    )] = None
     settlement_date: date
 
 
@@ -44,7 +44,7 @@ class ExpenseDetail(Base):
 class SettlementDetail(Base):
     expense: ExpenseDetail
     settled_amount: Decimal
-    remaining_debt: Decimal
+    remaining_debt_for_this_expense: Decimal
 
 
 class SettlementResponse(Base):
