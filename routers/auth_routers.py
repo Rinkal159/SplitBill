@@ -18,7 +18,8 @@ from model import (
     Invitation,
     FriendsHistory,
     GroupInvitation,
-    GroupInvitationStatus,
+    InvitationStatus,
+    GroupHistory
 )
 
 auth_router = APIRouter(prefix="/api/auth", tags=["Auth"])
@@ -33,7 +34,7 @@ async def signup_api(
     profilePicture: UploadFile | None = File(None),
     db: AsyncSession = Depends(get_db),
 ):
-    async with db.begin():
+    try:
         user.email = user.email.lower()
 
         result = await db.execute(
@@ -84,7 +85,7 @@ async def signup_api(
                         Invitation.invitee_email == new_user.email,
                         Invitation.invitee_mobile_number == new_user.mobile_number,
                     ),
-                    Invitation.status == "pending",
+                    Invitation.status == InvitationStatus.PENDING,
                 ),
             )
         )
@@ -101,14 +102,13 @@ async def signup_api(
                     )
                 )
                 await db.delete(invitation)
-                continue
             else:
                 seen.add(invitation.inviter_id)
                 invitation.invitee_id = new_user.id
                 await db.execute(
                     update(FriendsHistory)
                     .where(FriendsHistory.invitation_id == invitation.id)
-                    .values(receiver_id=new_user.id)
+                    .values(receiver_id=new_user.id, guest_invitee=None)
                 )
 
         # check pending group invitations
@@ -118,7 +118,7 @@ async def signup_api(
                     GroupInvitation.invitee_email == new_user.email,
                     GroupInvitation.invitee_mobile_number == new_user.mobile_number,
                 ),
-                GroupInvitation.status == GroupInvitationStatus.PENDING,
+                GroupInvitation.status == InvitationStatus.PENDING,
             )
         )
         existed_group_invitations = result.scalars().all()
@@ -126,12 +126,28 @@ async def signup_api(
         seen = set()
         for invitation in existed_group_invitations:
             if invitation.group_id in seen:
+                await db.execute(
+                    delete(GroupHistory).where(
+                        GroupHistory.invitation_id == invitation.id, 
+                    )
+                )
                 await db.delete(invitation)
             else:
                 seen.add(invitation.group_id)
                 invitation.invitee_id = new_user.id
-
+                invitation.invitee_email = None # type: ignore[args]
+                invitation.invitee_mobile_number = None # type: ignore[args]
+                await db.execute(
+                    update(GroupHistory)
+                    .where(GroupHistory.invitation_id == invitation.id)
+                    .values(receiver_id=new_user.id, guest_invitee=None)
+                )
+                
+        await db.commit()
         await db.refresh(new_user)
+    except:
+        await db.rollback()
+        raise
 
     return new_user
 
