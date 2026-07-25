@@ -111,7 +111,7 @@ class BorrowingsAndLendings(Base):
 # * FriendsSettlements
 class FriendsSettlements(Base):
     expense: ExpenseDetail
-    settlement: Decimal
+    net_balance: Decimal
 
 
 class FriendsSettlementsResponse(Base):
