@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict, EmailStr, model_validator
 from typing import Annotated
-from model import GroupInvitationStatus, GroupMemberRole
+from model import InvitationStatus, GroupMemberRole
 from enum import Enum
 from datetime import datetime, date
 from decimal import Decimal
@@ -48,7 +48,7 @@ class GroupDetail(Base):
 
 class InvitationResponse(Base):
     id: int
-    status: GroupInvitationStatus
+    status: InvitationStatus
     group: GroupDetail
     inviter: UserDetail
 
@@ -89,7 +89,7 @@ class ExpenseDetail(Base):
     
 class SettlementsWithMember(Base):
     expense: ExpenseDetail
-    settlement: Decimal
+    net_balance: Decimal
     
     
 class ExpenseWithSpecificMemberResponse(Base):
