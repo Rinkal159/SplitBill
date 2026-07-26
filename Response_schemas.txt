@@ -33,7 +33,7 @@
     }
 
 
-* 3. GET - /api/expenses/you - Get all borrowings and lendings
+* 3. GET - /api/expenses/me - Get all borrowings and lendings
     {
         "total_borrowings" : <total_borrowed_money>,
         "total_lendings" : <total_lent_money>,
