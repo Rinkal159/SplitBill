@@ -199,3 +199,9 @@ def logout_api(current_user=Depends(get_current_user)):
     response.delete_cookie(key="token", httponly=True, secure=False, samesite="lax")
 
     return response
+
+
+# * get me
+@auth_router.get("/me", response_model=UserResponseSchema)
+def get_me_api(current_user=Depends(get_current_user)):
+    return current_user
