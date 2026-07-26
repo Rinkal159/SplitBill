@@ -1,11 +1,10 @@
-from fastapi import HTTPException, status, Request, FastAPI
+from fastapi import status, Request, FastAPI
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteException
 from fastapi.exceptions import RequestValidationError
-from fastapi.exceptions import ValidationException
 
 def handlers(app: FastAPI):
-    
+    # general exceptions
     @app.exception_handler(StarletteException)
     def exception_general(request: Request, exception: StarletteException):
         return JSONResponse(
@@ -13,7 +12,7 @@ def handlers(app: FastAPI):
             content={"error" : exception.detail}
         )
         
-        
+    # 422 exceptions
     @app.exception_handler(RequestValidationError)
     def exception_422(request: Request, exception: RequestValidationError):
         errors= []
@@ -30,5 +29,3 @@ def handlers(app: FastAPI):
             content={"error" : errors}
         )
         
-        
-    return app
