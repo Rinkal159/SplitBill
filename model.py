@@ -63,14 +63,22 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     password: Mapped[str] = mapped_column(String(255))
     mobile_number: Mapped[str] = mapped_column(String(10), unique=True)
-    profile_picture: Mapped[str] = mapped_column(String(500), nullable=True)
+    profile_picture: Mapped[str] = mapped_column(String(500), nullable=True) # public id
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-
+    
+    @property
+    def profile_picture_path(self):
+        if self.profile_picture:
+            url, _ = cloudinary_url(self.profile_picture)
+            return url
+        return "/static/pictures/default.png"
+       
+       
     # friends
     # it's not like you actually sent, but your id is smaller, that's why in user_id, your id is stored
     sent_friendships: Mapped[list["Friends"]] = relationship(
@@ -184,14 +192,38 @@ class User(Base):
         lazy="selectin",
         back_populates="performed_by_user"
     )
+    
+    # history of profile updates
+    user_history: Mapped[list["UserHistory"]] = relationship(
+        "UserHistory",
+        foreign_keys="UserHistory.user_id",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
 
-    @property
-    def profile_picture_path(self):
-        if self.profile_picture:
-            url, _ = cloudinary_url(self.profile_picture)
-            return url
-        return "/static/pictures/default.png"
 
+class UserHistoryAction(str, Enum):
+    NAME_UPDATED = "NAME_UPDATED"
+    PROFILE_PICTURE_UPDATED = "PROFILE_PICTURE_UPDATED"
+    PASSWORD_UPDATED = "PASSWORD_UPDATED"
+    
+    
+class UserHistory(Base):
+    __tablename__ = "user_history"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"))
+    action: Mapped[UserHistoryAction] = mapped_column(SQLAlchemyEnum(UserHistoryAction))
+    performed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[user_id],
+        back_populates="user_history",
+        lazy="selectin"
+    )
+    
 
 class InvitationStatus(str, Enum):
     PENDING = "PENDING"
