@@ -397,7 +397,7 @@ async def action_on_group_invitation_api(
 
 # * get groups in which you're a member or admin
 @group_router.get("/", response_model=list[GroupResponseSchema])
-async def get_groups(
+async def get_groups_api(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
     result = await db.execute(
@@ -421,7 +421,7 @@ async def get_groups(
 
 # * get expenses and settlements with specific group member
 @group_router.get(
-    "/member/{group_id}/{user_id}",
+    "/{group_id}/members/{user_id}/expenses",
     response_model=ExpenseWithSpecificMemberResponseSchema,
 )
 async def get_expenses_shared_with_member_api(
