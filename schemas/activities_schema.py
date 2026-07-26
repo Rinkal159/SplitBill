@@ -7,6 +7,7 @@ class Base(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+#* PaginatedActivitiesResponse
 class UserDetail(Base):
     id: int
     name: str

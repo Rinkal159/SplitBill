@@ -5,7 +5,7 @@ from model import InvitationStatus
 
 
 class Base(BaseModel):
-    pass
+    model_config = ConfigDict(from_attributes=True)
 
 
 #* InvitationCreate
@@ -42,12 +42,8 @@ class UserDetail(Base):
     mobile_number: str
     profile_picture_path: str
 
-    model_config = ConfigDict(from_attributes=True)
-
 
 class InvitationsResponse(Base):
     id: int
     status: InvitationStatus
     inviter: UserDetail
-
-    model_config = ConfigDict(from_attributes=True)

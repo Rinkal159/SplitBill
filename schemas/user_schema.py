@@ -6,9 +6,10 @@ from fastapi.exceptions import RequestValidationError
 
 
 class Base(BaseModel):
-    pass
+    model_config = ConfigDict(from_attributes=True)
 
 
+#* UserCreate
 class UserCreate(Base):
     name: Annotated[str, Field(min_length=4, max_length=100)]
     email: EmailStr
@@ -31,6 +32,7 @@ class UserCreate(Base):
             raise RequestValidationError(e.errors())
 
 
+#* UserResponse
 class UserResponse(Base):
     id: int
     name: str
@@ -38,9 +40,8 @@ class UserResponse(Base):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
 
-
+#* UserLogin
 class UserLogin(Base):
     email: EmailStr
     password: str
