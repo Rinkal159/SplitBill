@@ -97,7 +97,7 @@ async def add_expense_api(
     return new_expense
 
 
-# * get all expenses in which you're involved
+# * get all expenses in which you're involved - All expenses
 @expense_router.get("/", response_model=ExpenseResponseSchema)
 async def get_all_expenses_api(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
@@ -116,7 +116,7 @@ async def get_all_expenses_api(
     return {"expenses": settlements}
 
 
-# * get all group expenses in which you're involved
+# * get all group expenses in which you're involved - All group expenses
 @expense_router.get("/groups/{group_id}", response_model=ExpenseResponseSchema)
 async def get_all_group_expenses_api(
     group_id: int,
@@ -163,8 +163,8 @@ async def get_all_group_expenses_api(
     return {"expenses": settlements}
 
 
-# * get all your borrowings and lendings
-@expense_router.get("/you", response_model=BorrowingsAndLendingsSchema)
+# * get all your borrowings and lendings - Dashboard
+@expense_router.get("/me", response_model=BorrowingsAndLendingsSchema)
 async def get_all_borrowing_and_lendings_api(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
@@ -263,7 +263,7 @@ async def get_all_borrowing_and_lendings_api(
     }
 
 
-# * get all expenses in which you and your friend is involved
+# * get all expenses in which you and your friend is involved - Friends
 @expense_router.get(
     "/friends/{friend_id}", response_model=FriendsSettlementsResponseSchema
 )
