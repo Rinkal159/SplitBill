@@ -19,8 +19,8 @@ from model import (
     GroupHistory,
     GroupHistoryAction,
     GroupMember,
-    GroupInvitation,
-    FriendsHistoryAction
+    FriendsHistoryAction,
+    UserHistory
 )
 
 activites_router = APIRouter(prefix="/api/activities", tags=["Activities"])
@@ -32,7 +32,7 @@ async def get_activities_api(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
     page: int = 1,
-    limit: Annotated[int, Query(gt=0, lt=100)] = 5,
+    limit: Annotated[int, Query(gt=0, lt=100)] = 5
 ):
     # type
     # group_id
@@ -175,8 +175,20 @@ async def get_activities_api(
         )
     )
 
+    user_query = select(
+        literal("USER").label("type"),
+        literal(None).label("group_id"),
+        cast(UserHistory.action, String).label("action"),
+        UserHistory.user_id.label("performed_by"),
+        literal(None).label("affected_user"),
+        literal(None).label("affected_guest"),
+        literal(True).label("performed_by_me"),
+        UserHistory.performed_at.label("performed_at"),
+        literal(None).label("amount_settled")
+    )
+
     activities = union_all(
-        expense_query, settlement_query, friends_query, group_query
+        expense_query, settlement_query, friends_query, group_query, user_query
     ).subquery()
 
     result = await db.execute(select(func.count()).select_from(activities))
