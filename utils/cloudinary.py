@@ -1,6 +1,7 @@
 import cloudinary
-import cloudinary.uploader
 from env_config import settings
+import cloudinary.uploader
+from fastapi import HTTPException, status
 
 cloudinary.config(
     cloud_name=settings.cloudinary_cloud_name,
@@ -17,3 +18,9 @@ def upload_picture_on_cloudinary(file):
     )
 
     return result["public_id"]
+
+
+def delete_picture_from_cloudinary(public_id):
+    result = cloudinary.uploader.destroy(public_id=public_id)
+    if result.get("result") != "ok":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Failed to destory image")
