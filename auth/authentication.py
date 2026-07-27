@@ -8,9 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from model import User
 
-def create_token(data: dict) -> str:
+def create_token(data: dict, expires_delta: int) -> str:
     payload = data.copy()
-    expiry = datetime.now(UTC) + timedelta(settings.token_expiry_minutes)
+    expiry = datetime.now(UTC) + timedelta(minutes=expires_delta)
     payload.update({"exp" : expiry})
     
     token = jwt.encode(payload, settings.token_secret_key, algorithm=settings.token_algorithm)
@@ -20,10 +20,6 @@ def create_token(data: dict) -> str:
 def verify_token(token: str):
     try:
         payload = jwt.decode(token, settings.token_secret_key, algorithms=[settings.token_algorithm])
-        user_id = payload.get("user_id")
-        
-        if not user_id:
-            raise raise_exception(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
         
     except ExpiredSignatureError:
         raise raise_exception(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session is expired. Please log in again.")
@@ -31,14 +27,19 @@ def verify_token(token: str):
     except JWTError:
         raise raise_exception(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     
-    return user_id
+    return payload
 
 
 async def get_current_user(token: str | None = Cookie(None), db: AsyncSession = Depends(get_db)):
     if not token:
         raise raise_exception(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session is expired. Please log in again.")
 
-    user_id = verify_token(token)
+    payload = verify_token(token)
+    
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise raise_exception(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalars().one_or_none()
     
