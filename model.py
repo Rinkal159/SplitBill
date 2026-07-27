@@ -79,6 +79,15 @@ class User(Base):
         return "/static/pictures/default.png"
        
        
+    # otps sent to reset the password
+    password_reset_otps: Mapped[list["PasswordResetOTP"]] = relationship(
+        "PasswordResetOTP",
+        foreign_keys="PasswordResetOTP.user_id",
+        back_populates="user",
+        lazy="selectin",
+        cascade="all, delete-orphan"
+    )
+       
     # friends
     # it's not like you actually sent, but your id is smaller, that's why in user_id, your id is stored
     sent_friendships: Mapped[list["Friends"]] = relationship(
@@ -224,11 +233,30 @@ class UserHistory(Base):
         lazy="selectin"
     )
     
+    
+class PasswordResetOTP(Base):
+    __tablename__ = "password_reset_otp"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"))
+    otp: Mapped[str] = mapped_column(String(255))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now()) 
+    
+    user: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[user_id],
+        back_populates="password_reset_otps",
+        lazy="selectin"
+    )
+
 
 class InvitationStatus(str, Enum):
     PENDING = "PENDING"
     ACCEPTED = "ACCEPTED"
     REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
 
 
 class Invitation(Base):
@@ -487,6 +515,8 @@ class ExpenseHistory(Base):
 class FriendsHistoryAction(str, Enum):
     REQUEST_SENT = "REQUEST_SENT"
     REQUEST_ACCEPTED = "REQUEST_ACCEPTED"
+    REQUEST_CANCELLED = "REQUEST_CANCELLED"
+    FRIEND_REMOVED = "FRIEND_REMOVED"
 
 
 class FriendsHistory(Base):
@@ -500,7 +530,7 @@ class FriendsHistory(Base):
         ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"), nullable=True
     )
 
-    invitation_id: Mapped[int] = mapped_column(ForeignKey("invitations.id"))
+    invitation_id: Mapped[int] = mapped_column(ForeignKey("invitations.id"), nullable=True)
 
     guest_invitee: Mapped[str] = mapped_column(String(255), nullable=True)
 
