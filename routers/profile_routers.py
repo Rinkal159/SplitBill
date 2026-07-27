@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from auth.authentication import get_current_user
-from utils.cloudinary import delete_picture_from_cloudinary, upload_picture_on_cloudinary
-from utils.hash_password import hash, verify
+from services.cloudinary import delete_picture_from_cloudinary, upload_picture_on_cloudinary
+from services.hash_password_otp import hash, verify
 
 from model import UserHistory, UserHistoryAction
 from schemas.profile_schema import (ProfileUpdate as ProfileUpdateSchema, ChangePassword as ChangePasswordSchema)
