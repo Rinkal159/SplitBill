@@ -45,3 +45,25 @@ class UserResponse(Base):
 class UserLogin(Base):
     email: EmailStr
     password: str
+
+
+#* ForgotPassword
+class ForgotPassword(Base):
+    email: EmailStr
+    
+
+#* VerifyOTP
+class VerifyOTP(Base):
+    email: EmailStr
+    otp: Annotated[
+        str,
+        Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    ]
+    
+    
+#* ResetPassword
+class ResetPassword(Base):
+    email: EmailStr
+    new_password: Annotated[str, Field(
+        min_length=8
+    )]
