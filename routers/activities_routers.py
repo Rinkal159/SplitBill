@@ -2,7 +2,18 @@ from fastapi import APIRouter, Depends, Query
 from auth.authentication import get_current_user
 from database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, literal, union_all, or_, cast, String, case, and_, func, union
+from sqlalchemy import (
+    select,
+    literal,
+    union_all,
+    or_,
+    cast,
+    String,
+    case,
+    and_,
+    func,
+    union,
+)
 from typing import Annotated
 from sqlalchemy.orm import aliased
 
@@ -20,7 +31,7 @@ from model import (
     GroupHistoryAction,
     GroupMember,
     FriendsHistoryAction,
-    UserHistory
+    UserHistory,
 )
 
 activites_router = APIRouter(prefix="/api/activities", tags=["Activities"])
@@ -32,7 +43,7 @@ async def get_activities_api(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
     page: int = 1,
-    limit: Annotated[int, Query(gt=0, lt=100)] = 5
+    limit: Annotated[int, Query(gt=0, lt=100)] = 10,
 ):
     # type
     # group_id
@@ -104,11 +115,17 @@ async def get_activities_api(
         FriendsHistory.performed_by.label("performed_by"),
         case(
             (
-                FriendsHistory.action == FriendsHistoryAction.REQUEST_SENT, FriendsHistory.receiver_id
+                or_(
+                    FriendsHistory.action == FriendsHistoryAction.REQUEST_SENT,
+                    FriendsHistory.action == FriendsHistoryAction.FRIEND_REMOVED,
+                    FriendsHistory.action == FriendsHistoryAction.REQUEST_CANCELLED
+                ),
+                FriendsHistory.receiver_id,
             ),
             (
-                FriendsHistory.action == FriendsHistoryAction.REQUEST_ACCEPTED, FriendsHistory.sender_id
-            )
+                FriendsHistory.action == FriendsHistoryAction.REQUEST_ACCEPTED,
+                FriendsHistory.sender_id,
+            ),
         ).label("affected_user"),
         case(
             (FriendsHistory.guest_invitee.is_not(None), FriendsHistory.guest_invitee),
@@ -126,38 +143,33 @@ async def get_activities_api(
             FriendsHistory.receiver_id == current_user.id,
         )
     )
-    
+
     group_query = select(
         literal("GROUP").label("type"),
         GroupHistory.group_id.label("group_id"),
         cast(GroupHistory.action, String).label("action"),
-        
         GroupHistory.performed_by.label("performed_by"),
         case(
+            (GroupHistory.action == GroupHistoryAction.GROUP_CREATED, literal(None)),
             (
-                GroupHistory.action == GroupHistoryAction.GROUP_CREATED, literal(None)
+                GroupHistory.action == GroupHistoryAction.GROUP_INVITATION_SENT,
+                GroupHistory.receiver_id,
             ),
             (
-                GroupHistory.action == GroupHistoryAction.GROUP_INVITATION_SENT, GroupHistory.receiver_id
+                GroupHistory.action == GroupHistoryAction.GROUP_INVITATION_ACCEPTED,
+                GroupHistory.sender_id,
             ),
-            (
-                GroupHistory.action == GroupHistoryAction.GROUP_INVITATION_ACCEPTED, GroupHistory.sender_id
-            )
         ).label("affected_user"),
         case(
-            (
-                GroupHistory.guest_invitee.is_not(None), GroupHistory.guest_invitee    
-            ),
+            (GroupHistory.guest_invitee.is_not(None), GroupHistory.guest_invitee),
             else_=literal(None),
         ).label("affected_guest"),
-        
         case(
             (GroupHistory.performed_by == current_user.id, literal(True)),
             else_=literal(False),
         ).label("performed_by_me"),
         GroupHistory.performed_at.label("performed_at"),
         literal(None).label("amount_settled"),
-        
     ).where(
         or_(
             # User is already a member
@@ -166,12 +178,11 @@ async def get_activities_api(
                     GroupMember.user_id == current_user.id
                 )
             ),
-
             # User is NOT a member but was invited
             and_(
                 GroupHistory.action == GroupHistoryAction.GROUP_INVITATION_SENT,
                 GroupHistory.receiver_id == current_user.id,
-            )
+            ),
         )
     )
 
@@ -184,7 +195,7 @@ async def get_activities_api(
         literal(None).label("affected_guest"),
         literal(True).label("performed_by_me"),
         UserHistory.performed_at.label("performed_at"),
-        literal(None).label("amount_settled")
+        literal(None).label("amount_settled"),
     )
 
     activities = union_all(
@@ -193,7 +204,7 @@ async def get_activities_api(
 
     result = await db.execute(select(func.count()).select_from(activities))
     total_activities = result.scalar_one()
-    
+
     PerformedBy = aliased(User, name="performed_by_user")
     AffectedUser = aliased(User, name="affected_user_obj")
 
