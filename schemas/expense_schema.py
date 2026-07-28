@@ -55,6 +55,7 @@ class ExpenseCreateResponse(Base):
     group: GroupDetail | None
     title: str
     description: str | None
+    attachment_url: str | None
     note: str | None
     total_amount: Decimal
     expense_date: date
