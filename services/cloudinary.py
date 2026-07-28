@@ -10,10 +10,10 @@ cloudinary.config(
     secure=True
 )
 
-def upload_picture_on_cloudinary(file):
+def upload_picture_on_cloudinary(file, folder):
     result = cloudinary.uploader.upload(
         file.file,                
-        folder="profile_pictures",
+        folder=folder,
         resource_type="image"
     )
 
