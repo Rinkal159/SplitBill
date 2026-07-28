@@ -29,7 +29,7 @@ async def edit_profile_api(
             delete_picture_from_cloudinary(current_user.profile_picture)
             
             # upload picture on cloudinary and get the public id
-            profile_picture_public_id = upload_picture_on_cloudinary(profilePicture)
+            profile_picture_public_id = upload_picture_on_cloudinary(file=profilePicture, folder="profile_pictures")
             profile_dict["profile_picture"] = profile_picture_public_id
             
             # history record for profile picture
