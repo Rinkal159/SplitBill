@@ -302,6 +302,7 @@ class Expense(Base):
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(String(1000), nullable=True)
+    attachment: Mapped[str] = mapped_column(String(500), nullable=True) # public id
     note: Mapped[str] = mapped_column(String(1000), nullable=True)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     expense_date: Mapped[date] = mapped_column(Date)
@@ -314,6 +315,14 @@ class Expense(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    
+    # attachment url
+    @property 
+    def attachment_url(self):
+        if self.attachment:
+            url, _ = cloudinary_url(self.attachment)
+            return url
+        return None
 
     # who has created expense
     creator: Mapped["User"] = relationship(
