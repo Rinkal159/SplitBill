@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
 from utils.get_member_settlement_data import get_member_settlement_data
-
+from utils.get_registered_and_guest_invitees_of_group import (
+    get_registered_and_guest_invitees_of_group,
+)
 from model import (
     Group,
     GroupMember,
@@ -14,15 +16,16 @@ from model import (
     GroupInvitation,
     InvitationStatus,
     GroupHistory,
-    GroupHistoryAction
+    GroupHistoryAction,
 )
 from schemas.group_schema import (
     GroupCreate as GroupCreateSchema,
+    GroupUpdate as GroupUpdateSchema,
+    AdditionalInvitations as AdditionalInvitationsSchema,
     InvitationResponse as InvitationResponseSchema,
     InvitationUpdate as InvitationUpdateSchema,
     InvitationUpdateStatus,
     GroupResponse as GroupResponseSchema,
-    GroupInvitationSchema,
     ExpenseWithSpecificMemberResponse as ExpenseWithSpecificMemberResponseSchema,
 )
 
@@ -37,28 +40,10 @@ async def create_group_api(
     current_user=Depends(get_current_user),
 ):
     try:
-        emails = [
-            invitation.email for invitation in group.invitations if invitation.email
-        ]
-        mobile_numbers = [
-            invitation.mobile_number
-            for invitation in group.invitations
-            if invitation.mobile_number
-        ]
-
-        # duplicate emails entered in invitation
-        if len(emails) != len(set(emails)):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Duplicate email invitations found",
-            )
-
-        # duplicate mobile numbers entered in invitation
-        if len(mobile_numbers) != len(set(mobile_numbers)):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Duplicate mobile number invitations found",
-            )
+        # get registered ids, non-registered emails and mobile numbers
+        existed_invitees, non_registered_emails, non_registered_mobile_numbers = (
+            await get_registered_and_guest_invitees_of_group(db=db, group=group)
+        )
 
         # creating group
         new_group = Group(
@@ -67,11 +52,12 @@ async def create_group_api(
 
         db.add(new_group)
         await db.flush()
-        
+
+        # creating group history - GROUP_CREATED
         new_group_history = GroupHistory(
             group_id=new_group.id,
             action=GroupHistoryAction.GROUP_CREATED,
-            performed_by=current_user.id
+            performed_by=current_user.id,
         )
         db.add(new_group_history)
 
@@ -79,29 +65,7 @@ async def create_group_api(
         new_group_member = GroupMember(
             group_id=new_group.id, user_id=current_user.id, role=GroupMemberRole.ADMIN
         )
-
         db.add(new_group_member)
-
-        result = await db.execute(
-            select(User).where(
-                or_(User.email.in_(emails), User.mobile_number.in_(mobile_numbers))
-            )
-        )
-
-        existed_invitees = result.scalars().all()
-
-        registered_emails = {user.email for user in existed_invitees}
-        registered_mobile_numbers = {user.mobile_number for user in existed_invitees}
-
-        non_registered_emails = [
-            email for email in emails if email not in registered_emails
-        ]
-
-        non_registered_mobile_numbers = [
-            mobile_number
-            for mobile_number in mobile_numbers
-            if mobile_number not in registered_mobile_numbers
-        ]
 
         # group invitations to "registered" invitees
         for existed in existed_invitees:
@@ -112,16 +76,16 @@ async def create_group_api(
                 group_id=new_group.id, inviter_id=current_user.id, invitee_id=existed.id
             )
             db.add(new_group_invitation)
-            
+
             await db.flush()
-            
+
             new_group_history = GroupHistory(
                 group_id=new_group.id,
                 invitation_id=new_group_invitation.id,
                 sender_id=current_user.id,
                 receiver_id=existed.id,
                 action=GroupHistoryAction.GROUP_INVITATION_SENT,
-                performed_by=current_user.id
+                performed_by=current_user.id,
             )
             db.add(new_group_history)
 
@@ -131,16 +95,16 @@ async def create_group_api(
                 group_id=new_group.id, inviter_id=current_user.id, invitee_email=email
             )
             db.add(new_group_invitation)
-            
+
             await db.flush()
-            
+
             new_group_history = GroupHistory(
                 group_id=new_group.id,
                 invitation_id=new_group_invitation.id,
                 sender_id=current_user.id,
                 guest_invitee=email,
                 action=GroupHistoryAction.GROUP_INVITATION_SENT,
-                performed_by=current_user.id
+                performed_by=current_user.id,
             )
             db.add(new_group_history)
 
@@ -152,19 +116,19 @@ async def create_group_api(
                 invitee_mobile_number=mobile_number,
             )
             db.add(new_group_invitation)
-            
+
             await db.flush()
-            
+
             new_group_history = GroupHistory(
                 group_id=new_group.id,
                 invitation_id=new_group_invitation.id,
                 sender_id=current_user.id,
                 guest_invitee=mobile_number,
                 action=GroupHistoryAction.GROUP_INVITATION_SENT,
-                performed_by=current_user.id
+                performed_by=current_user.id,
             )
             db.add(new_group_history)
-            
+
         await db.commit()
 
     except:
@@ -174,139 +138,224 @@ async def create_group_api(
     return {"message": "Created group successfully!"}
 
 
-# * send group inviations additionally
-@group_router.post("/{group_id}/invite")
+# * update group info
+@group_router.patch("/{group_id}")
 async def add_members_api(
     group_id: int,
-    invitation: GroupInvitationSchema,
+    group: GroupUpdateSchema,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    # if group doesn't exist
-    result = await db.execute(select(Group).where(Group.id == group_id, Group.is_deleted == False))
-    existed_group = result.scalars().one_or_none()
-
-    if not existed_group:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Group not found"
+    try:
+        # if group doesn't exist
+        result = await db.execute(
+            select(Group).where(Group.id == group_id, Group.is_deleted == False)
         )
+        existed_group = result.scalars().one_or_none()
 
-    # if you're not the admin
-    result = await db.execute(
-        select(GroupMember).where(
-            GroupMember.group_id == group_id,
-            GroupMember.user_id == current_user.id,
-            GroupMember.role == GroupMemberRole.ADMIN,
-        )
-    )
-    admin = result.scalars().one_or_none()
-
-    if not admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You're not authorized to perform requested action",
-        )
-
-    invitation_method = "email" if invitation.email else "mobile_number"
-    invitation_value = invitation.email or invitation.mobile_number
-
-    result = await db.execute(
-        select(User).where(getattr(User, invitation_method) == invitation_value)
-    )
-    existed_invitee = result.scalars().one_or_none()
-
-    # if invitee is registered
-    if existed_invitee:
-
-        # self invitation
-        if existed_invitee.id == current_user.id:
+        if not existed_group:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You are already a member of this group.",
+                status_code=status.HTTP_404_NOT_FOUND, detail="Group not found"
             )
 
-        # invitee is already member of the group
+        # if you're not the admin
         result = await db.execute(
             select(GroupMember).where(
                 GroupMember.group_id == group_id,
-                GroupMember.user_id == existed_invitee.id,
+                GroupMember.user_id == current_user.id,
+                GroupMember.role == GroupMemberRole.ADMIN,
             )
         )
-        existed_member = result.scalars().one_or_none()
+        admin = result.scalars().one_or_none()
 
-        if existed_member:
+        if not admin:
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Invitee is already member of the group",
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You're not authorized to perform requested action",
+            )
+            
+        group_dict = group.model_dump(exclude_unset=True)
+
+        # updating group info
+        for key, val in group_dict.items():
+            setattr(Group, key, val)
+
+        await db.commit()
+    except:
+        await db.rollback()
+        raise
+
+    return {"message": "Group edited successfully!"}
+
+
+# * send additional invitations
+@group_router.post("/{group_id}/invititations")
+async def send_invitations(
+    group_id: int,
+    invitations: AdditionalInvitationsSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        # if group doesn't exist
+        result = await db.execute(
+            select(Group).where(Group.id == group_id, Group.is_deleted == False)
+        )
+        existed_group = result.scalars().one_or_none()
+
+        if not existed_group:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Group not found"
             )
 
-        # already sent invitation to the invitee
+        # if you're not the admin
         result = await db.execute(
-            select(GroupInvitation).where(
+            select(GroupMember).where(
+                GroupMember.group_id == group_id,
+                GroupMember.user_id == current_user.id,
+                GroupMember.role == GroupMemberRole.ADMIN,
+            )
+        )
+        admin = result.scalars().one_or_none()
+
+        if not admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You're not authorized to perform requested action",
+            )
+
+        # get registered ids, non-registered emails and mobile numbers
+        existed_invitees, non_registered_emails, non_registered_mobile_numbers = (
+            await get_registered_and_guest_invitees_of_group(db=db, group=invitations)
+        )
+
+        # group members
+        result = await db.execute(
+            select(GroupMember.user_id).where(GroupMember.group_id == group_id)
+        )
+        group_members = set(result.scalars().all())
+
+        # group invitations
+        result = await db.execute(
+            select(
+                GroupInvitation.invitee_id,
+                GroupInvitation.invitee_email,
+                GroupInvitation.invitee_mobile_number,
+            ).where(
                 GroupInvitation.group_id == group_id,
                 GroupInvitation.status == InvitationStatus.PENDING,
-                GroupInvitation.invitee_id == existed_invitee.id,
             )
         )
-        existed_invitation = result.scalars().one_or_none()
+        group_invitations = result.all()
 
-        if existed_invitation:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Invitation is already sent to this invitee",
+        already_sent_invitee_ids = {
+            invitation.invitee_id
+            for invitation in group_invitations
+            if invitation.invitee_id
+        }
+        already_sent_invitee_emails = {
+            invitation.invitee_email
+            for invitation in group_invitations
+            if invitation.invitee_email
+        }
+        already_sent_invitee_mobile_numbers = {
+            invitation.invitee_mobile_number
+            for invitation in group_invitations
+            if invitation.invitee_mobile_number
+        }
+
+        # group invitations to "registered" invitees
+        for existed in existed_invitees:
+
+            # self invitation
+            if existed.id == current_user.id:
+                continue
+
+            # already a group member
+            if existed.id in group_members:
+                continue
+
+            # already sent invitation
+            if existed.id in already_sent_invitee_ids:
+                continue
+
+            new_group_invitation = GroupInvitation(
+                group_id=existed_group.id,
+                inviter_id=current_user.id,
+                invitee_id=existed.id,
             )
+            db.add(new_group_invitation)
 
-        # creating invitation
-        new_group_invitation = GroupInvitation(
-            group_id=group_id, inviter_id=current_user.id, invitee_id=existed_invitee.id
-        )
-        db.add(new_group_invitation)
+            await db.flush()
 
-    # if invitee is not registered
-    else:
-        invitation_method = (
-            "invitee_email" if invitation.email else "invitee_mobile_number"
-        )
-
-        # if already sent invitation from same method
-        result = await db.execute(
-            select(GroupInvitation).where(
-                GroupInvitation.group_id == group_id,
-                GroupInvitation.status == InvitationStatus.PENDING,
-                getattr(GroupInvitation, invitation_method) == invitation_value,
+            new_group_history = GroupHistory(
+                group_id=existed_group.id,
+                invitation_id=new_group_invitation.id,
+                sender_id=current_user.id,
+                receiver_id=existed.id,
+                action=GroupHistoryAction.GROUP_INVITATION_SENT,
+                performed_by=current_user.id,
             )
-        )
-        existed_invitation = result.scalars().one_or_none()
+            db.add(new_group_history)
 
-        if existed_invitation:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"You've already sent invitation to {invitation_value}",
+        # group invitations to "non-registered" invitees - email
+        for email in non_registered_emails:
+
+            # already sent invitation
+            if email in already_sent_invitee_emails:
+                continue
+
+            new_group_invitation = GroupInvitation(
+                group_id=existed_group.id,
+                inviter_id=current_user.id,
+                invitee_email=email,
             )
+            db.add(new_group_invitation)
 
-        # creating invitation
-        new_group_invitation = GroupInvitation(
-            group_id=group_id,
-            inviter_id=current_user.id,
-            **{invitation_method: invitation_value},
-        )
-        db.add(new_group_invitation)
-        
-    await db.flush()
+            await db.flush()
+
+            new_group_history = GroupHistory(
+                group_id=existed_group.id,
+                invitation_id=new_group_invitation.id,
+                sender_id=current_user.id,
+                guest_invitee=email,
+                action=GroupHistoryAction.GROUP_INVITATION_SENT,
+                performed_by=current_user.id,
+            )
+            db.add(new_group_history)
+
+        # group invitations to "non-registered" invitees - mobile_number
+        for mobile_number in non_registered_mobile_numbers:
+
+            # already sent invitation
+            if mobile_number in already_sent_invitee_mobile_numbers:
+                continue
+
+            new_group_invitation = GroupInvitation(
+                group_id=existed_group.id,
+                inviter_id=current_user.id,
+                invitee_mobile_number=mobile_number,
+            )
+            db.add(new_group_invitation)
+
+            await db.flush()
+
+            new_group_history = GroupHistory(
+                group_id=existed_group.id,
+                invitation_id=new_group_invitation.id,
+                sender_id=current_user.id,
+                guest_invitee=mobile_number,
+                action=GroupHistoryAction.GROUP_INVITATION_SENT,
+                performed_by=current_user.id,
+            )
+            db.add(new_group_history)
+
+        await db.commit()
+    except:
+        await db.rollback()
+        raise
     
-    new_group_history = GroupHistory(
-        group_id=group_id,
-        invitation_id=new_group_invitation.id,
-        sender_id=current_user.id,
-        receiver_id=existed_invitee.id if existed_invitee else None,
-        guest_invitee=None if existed_invitee else invitation_value,
-        action=GroupHistoryAction.GROUP_INVITATION_SENT,
-        performed_by=current_user.id
-    )
-    db.add(new_group_history)
-
-    await db.commit()
-    return {"message": "Sent group invitation successfully!"}
+    return {"message" : "Sent invitations successfully!"}
 
 
 # * get group invitations
@@ -320,7 +369,7 @@ async def get_group_invitations_api(
         .where(
             GroupInvitation.invitee_id == current_user.id,
             GroupInvitation.status == InvitationStatus.PENDING,
-            Group.is_deleted.is_(False)
+            Group.is_deleted.is_(False),
         )
     )
 
@@ -341,10 +390,7 @@ async def action_on_group_invitation_api(
     result = await db.execute(
         select(GroupInvitation)
         .join(Group)
-        .where(
-                GroupInvitation.id == invitation_id, 
-                Group.is_deleted.is_(False)
-        )
+        .where(GroupInvitation.id == invitation_id, Group.is_deleted.is_(False))
     )
     existed_invitation = result.scalars().one_or_none()
 
@@ -374,17 +420,16 @@ async def action_on_group_invitation_api(
             group_id=existed_invitation.group_id, user_id=current_user.id
         )
         db.add(new_group_member)
-        
+
         new_group_history = GroupHistory(
             group_id=existed_invitation.group_id,
             invitation_id=existed_invitation.id,
             sender_id=existed_invitation.inviter_id,
             receiver_id=current_user.id,
             action=GroupHistoryAction.GROUP_INVITATION_ACCEPTED,
-            performed_by=current_user.id
+            performed_by=current_user.id,
         )
         db.add(new_group_history)
-        
 
     # rejects invitation
     else:
