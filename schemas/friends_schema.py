@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, EmailStr, model_validator, ConfigDict
 from typing import Annotated
 from enum import Enum
 from model import InvitationStatus
+from decimal import Decimal
 
 
 class Base(BaseModel):
@@ -47,3 +48,17 @@ class InvitationsResponse(Base):
     id: int
     status: InvitationStatus
     inviter: UserDetail
+
+
+#* FriendProfileResponse
+class GroupDetail(Base):
+    id: int
+    name: str
+    description: str | None
+    creator: UserDetail
+    
+    
+class FriendProfileResponse(Base):
+    friend: UserDetail
+    total_balance: Decimal
+    common_groups: list[GroupDetail]
