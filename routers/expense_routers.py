@@ -1,20 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
-from sqlalchemy import select, or_, and_, delete
+from fastapi import APIRouter, Depends, HTTPException, status, Response, UploadFile, File
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from auth.authentication import get_current_user
 from decimal import Decimal
-from sqlalchemy.orm import selectinload
 from utils.get_creditors_debtors import get_creditors_debtors
 from utils.get_expense_groups import get_expense_groups
 from utils.validate_fields import validate_fields
 from utils.create_splits_of_expense import create_expense_splits
-from utils.get_friend_settlement_data import get_friend_settlement_data
 from utils.get_settlement_groups import get_settlement_groups
 from utils.get_all_expenses_in_which_user_involved import (
     get_all_expenses_in_which_user_involved,
 )
-
+from utils.friendship_checks import friendship_checks
+from services.cloudinary import upload_picture_on_cloudinary, delete_picture_from_cloudinary
 
 from schemas.expense_schema import (
     ExpenseCreate as ExpenseCreateSchema,
@@ -24,7 +23,7 @@ from schemas.expense_schema import (
     FriendsSettlementsResponse as FriendsSettlementsResponseSchema,
     UserDetail as UserDetailSchema,
 )
-from model import Expense, ExpenseSplits, Friends, ExpenseHistory, ExpenseHistoryAction, GroupMember, Group
+from model import Expense, ExpenseSplits, ExpenseHistory, ExpenseHistoryAction, GroupMember, Group
 
 expense_router = APIRouter(prefix="/api/expenses", tags=["Expenses"])
 
@@ -97,12 +96,73 @@ async def add_expense_api(
     return new_expense
 
 
+# * upload attachment (receipt) of the expense
+@expense_router.post("/{expense_id}/attachment", response_model=ExpenseCreateResponseSchema)
+async def upload_receipt_api(expense_id: int, attachment: UploadFile | None = File(None), db: AsyncSession=Depends(get_db), current_user=Depends(get_current_user)):
+    try:
+        # expense not exist
+        result = await db.execute(select(Expense).where(Expense.id == expense_id))
+        existed_expense = result.scalars().one_or_none()
+
+        if not existed_expense:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
+
+        # you're not a participant of that expense
+        result = await db.execute(select(ExpenseSplits).where(ExpenseSplits.expense_id == expense_id, ExpenseSplits.user_id==current_user.id))
+        existed_participant = result.scalars().one_or_none()
+
+        if not existed_participant:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to upload attachments")
+
+        # attachment already uploaded
+        if existed_expense.attachment:
+            delete_picture_from_cloudinary(existed_expense.attachment)
+
+        # storing attachment in database (in expense table)
+        if attachment:
+            if attachment.filename:
+                attachment_public_id = upload_picture_on_cloudinary(file=attachment, folder="expense_attachments")
+                existed_expense.attachment = attachment_public_id
+
+        await db.commit()
+        await db.refresh(existed_expense)
+    except:
+        await db.rollback()
+        raise
+    
+    return existed_expense
+    
+
+# * get single expense
+@expense_router.get("/{expense_id}", response_model=ExpenseResponseSchema)
+async def get_single_expense(expense_id: int, db: AsyncSession=Depends(get_db),current_user=Depends(get_current_user)):
+    # expense not exist
+    result = await db.execute(select(Expense).where(Expense.id == expense_id))
+    existed_expense = result.scalars().one_or_none()
+    
+    if not existed_expense:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
+    
+    # you're not involved in that expense
+    result = await db.execute(select(ExpenseSplits).where(ExpenseSplits.expense_id == expense_id, ExpenseSplits.user_id == current_user.id))
+    existed_expense_split = result.scalars().one_or_none()
+    
+    if not existed_expense_split:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You're not involved in this expense")
+    
+    # get settlements for this expense
+    settlements = await get_all_expenses_in_which_user_involved(
+        expense_ids=[expense_id], db=db, current_user=current_user
+    )
+
+    return {"expenses": settlements}
+
+
 # * get all expenses in which you're involved - All expenses
 @expense_router.get("/", response_model=ExpenseResponseSchema)
 async def get_all_expenses_api(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
-
     # get all expenses in which you're involved
     result = await db.execute(
         select(ExpenseSplits.expense_id).where(ExpenseSplits.user_id == current_user.id)
@@ -272,31 +332,9 @@ async def get_friends_settlements_api(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    # friend_id is not your friend
-    result = await db.execute(
-        select(Friends)
-        .options(selectinload(Friends.friend), selectinload(Friends.user))
-        .where(
-            or_(
-                and_(
-                    Friends.user_id == current_user.id, Friends.friend_id == friend_id
-                ),
-                and_(
-                    Friends.user_id == friend_id, Friends.friend_id == current_user.id
-                ),
-            )
-        )
-    )
-    existed_friendship = result.scalars().one_or_none()
-    if not existed_friendship:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot fetch expenses with non-friend",
-        )
-
-    return await get_friend_settlement_data(
-        friend_id=friend_id, db=db, current_user=current_user
-    )
+    # friend settlement data
+    response = await friendship_checks(db=db, current_user=current_user, friend_id=friend_id)
+    return response["friend_settlement_data"]
 
 
 # * delete an expense
