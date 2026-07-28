@@ -32,6 +32,17 @@ class GroupCreate(Base):
     invitations: list[GroupInvitationSchema]
 
 
+# * GroupUpdate
+class GroupUpdate(Base):
+    name: Annotated[str | None, Field(min_length=4, max_length=100)] = None
+    description: Annotated[str | None, Field(min_length=10, max_length=1000)] = None
+    
+    
+# * AdditionalInvitations
+class AdditionalInvitations(Base):
+    invitations: list[GroupInvitationSchema]
+
+
 # * InviatationResponse
 class UserDetail(Base):
     id: int
