@@ -59,7 +59,7 @@ async def get_all_expenses_in_which_user_involved(expense_ids, db, current_user)
                     {
                         "from_user": UserDetailSchema.model_validate(debtor["user"]),
                         "to_user": UserDetailSchema.model_validate(creditor["user"]),
-                        "amount": -transfer,
+                        "amount": transfer,
                     }
                 )
 
