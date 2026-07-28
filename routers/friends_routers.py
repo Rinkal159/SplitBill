@@ -3,8 +3,8 @@ from database import get_db
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from auth.authentication import get_current_user
-from utils.get_friend_settlement_data import get_friend_settlement_data
 from decimal import Decimal
+from utils.friendship_checks import friendship_checks
 
 from schemas.friends_schema import (
     InvitationCreate as InvitationCreateSchema,
@@ -12,6 +12,7 @@ from schemas.friends_schema import (
     InvitationUpdateStatus as InvitationUpdateStatusSchema,
     InvitationUpdate as InvitationUpdateSchema,
     UserDetail as UserDetailSchema,
+    FriendProfileResponse as FriendProfileResponseSchema
 )
 from model import (
     User,
@@ -20,6 +21,8 @@ from model import (
     FriendsHistory,
     FriendsHistoryAction,
     InvitationStatus,
+    Group,
+    GroupMember,
 )
 
 friends_router = APIRouter(prefix="/api/friends", tags=["Friends"])
@@ -224,30 +227,48 @@ async def action_on_invitation_api(
     return {"message": message}
 
 
-#* cancel invitation
+# * cancel invitation
 @friends_router.delete("/invitations/{invitation_id}")
-async def cancel_invitation_api(invitation_id: int, db:AsyncSession=Depends(get_db), current_user=Depends(get_current_user)):
-
+async def cancel_invitation_api(
+    invitation_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     try:
         # invitation not exist
-        result = await db.execute(select(Invitation).where(
-            Invitation.id == invitation_id
-        ))
+        result = await db.execute(
+            select(Invitation).where(Invitation.id == invitation_id)
+        )
         existed_invitation = result.scalars().one_or_none()
 
         if not existed_invitation:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found"
+            )
 
         # you're not the inviter or status is not pending
-        if existed_invitation.inviter_id != current_user.id or existed_invitation.status != InvitationStatus.PENDING:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to perform requested action")
+        if (
+            existed_invitation.inviter_id != current_user.id
+            or existed_invitation.status != InvitationStatus.PENDING
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to perform requested action",
+            )
 
         existed_invitation.status = InvitationStatus.CANCELLED
 
         new_friend_history = FriendsHistory(
             sender_id=current_user.id,
-            receiver_id=existed_invitation.invitee_id if existed_invitation.invitee_id else None,
-            guest_invitee=None if existed_invitation.invitee_id else existed_invitation.invitee_email or existed_invitation.invitee_mobile_number,
+            receiver_id=(
+                existed_invitation.invitee_id if existed_invitation.invitee_id else None
+            ),
+            guest_invitee=(
+                None
+                if existed_invitation.invitee_id
+                else existed_invitation.invitee_email
+                or existed_invitation.invitee_mobile_number
+            ),
             action=FriendsHistoryAction.REQUEST_CANCELLED,
             performed_by=current_user.id,
         )
@@ -257,10 +278,8 @@ async def cancel_invitation_api(invitation_id: int, db:AsyncSession=Depends(get_
     except:
         await db.rollback()
         raise
-    
-    return {"message" : "Invitation cancelled successfully!"}
-    
 
+    return {"message": "Invitation cancelled successfully!"}
 
 
 # * get all the friends
@@ -292,35 +311,14 @@ async def remove_friend_api(
     current_user=Depends(get_current_user),
 ):
     try:
-        # you and friend_id are not friends
-        result = await db.execute(
-            select(Friends).where(
-                or_(
-                    and_(
-                        Friends.user_id == current_user.id,
-                        Friends.friend_id == friend_id,
-                    ),
-                    and_(
-                        Friends.friend_id == current_user.id,
-                        Friends.user_id == friend_id,
-                    ),
-                )
-            )
-        )
-        existed_friendship = result.scalars().one_or_none()
-
-        if not existed_friendship:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Friendship not exist"
-            )
-
-        friend_settlement_data = await get_friend_settlement_data(
-            friend_id=friend_id, db=db, current_user=current_user
-        )
+        # friend settlement data - you need total balance
+        response = await friendship_checks(db=db, current_user=current_user, friend_id=friend_id)
+        friend_settlement_data = response["friend_settlement_data"]
+        existed_friendship = response["existed_friendship"]
 
         total_balance = friend_settlement_data["total_balance"]
         if total_balance != Decimal("0"):
-            message = f"You cannnot unfriend {existed_friendship.friend.name if existed_friendship.user_id == current_user.id else existed_friendship.user.name}, you {'lent' if total_balance > Decimal("0") else 'borrowed'} {abs(total_balance)}, as outstanding financial obligation exist between you two, cannot remove friend until all balances are settled."
+            message = f"You cannnot unfriend {existed_friendship.friend.name if existed_friendship.user_id == current_user.id else existed_friendship.user.name}, you {'lent' if total_balance > Decimal("0") else 'borrowed'} {abs(total_balance)}. As outstanding financial obligation exist between you two, you cannot remove friend until all balances are settled."
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
         await db.delete(existed_friendship)
@@ -339,3 +337,34 @@ async def remove_friend_api(
         raise
 
     return {"message": "Removed friend successfully!"}
+
+
+# * see friends profile - friend, total balance and groups in which you and friend are included
+@friends_router.get("/{friend_id}", response_model=FriendProfileResponseSchema)
+async def get_friend(
+    friend_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    # friend settlement data - you need friend and total balance
+    response = await friendship_checks(db=db, current_user=current_user, friend_id=friend_id)
+    friend_settlement_data = response["friend_settlement_data"]
+    
+    # groups in which you're included
+    groups_you_are_included = select(GroupMember.group_id).where(GroupMember.user_id == current_user.id)
+
+    # groups in which you and your friend both are included
+    result = await db.execute(
+        select(Group)
+        .join(GroupMember)
+        .where(
+            GroupMember.user_id == friend_id, GroupMember.group_id.in_(groups_you_are_included)
+        )
+    )
+    groups_you_and_friend_included = result.scalars().all()
+
+    return {
+        "friend" : friend_settlement_data["friend"],
+        "total_balance" : friend_settlement_data["total_balance"],
+        "common_groups" : groups_you_and_friend_included
+    }
