@@ -69,15 +69,19 @@ async def signup_api(
             )
 
         user_dict = user.model_dump()
+        
+        # make email lower
+        user_dict["email"] = user_dict["email"].lower()
 
         # store the profile picture in cloudinary and get the public id
         if profilePicture:
             if profilePicture.filename:
-                profile_picture_public_id = upload_picture_on_cloudinary(profilePicture)
+                profile_picture_public_id = upload_picture_on_cloudinary(file=profilePicture, folder="profile_pictures")
                 user_dict["profile_picture"] = profile_picture_public_id
 
         # hash password
         user_dict["password"] = hash(user.password)
+        
 
         new_user = User(**user_dict)
         db.add(new_user)
