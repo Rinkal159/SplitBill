@@ -19,15 +19,8 @@ async def get_friend_settlement_data(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-
-    result = await db.execute(select(User).where(User.id == friend_id))
-    friend = result.scalars().one_or_none()
-
-    if not friend:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Friend does not exist"
-        )
-
+    friend = await db.execute(select(User).where(User.id == friend_id))
+    
     your_expenses = select(ExpenseSplits.expense_id).where(
         ExpenseSplits.user_id == current_user.id
     )
@@ -50,7 +43,7 @@ async def get_friend_settlement_data(
     )
 
     return {
-        "friend": friend,
+        "friend": friend.scalars().one_or_none(),
         "expense_groups": expense_groups,
         "settlements": settlements,
         "total_balance": total_balance,
