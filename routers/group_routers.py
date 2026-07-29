@@ -324,7 +324,7 @@ async def add_members_api(
 
 
 # * send additional invitations
-@group_router.post("/{group_id}/invititations")
+@group_router.post("/{group_id}/invitations")
 async def send_invitations(
     group_id: int,
     invitations: AdditionalInvitationsSchema,
