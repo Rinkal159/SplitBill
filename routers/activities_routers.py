@@ -12,10 +12,13 @@ from sqlalchemy import (
     case,
     and_,
     func,
-    union,
+    String,
+    Integer,
+    Numeric
 )
-from typing import Annotated
+from typing import Annotated, Literal
 from sqlalchemy.orm import aliased
+from enum import Enum
 
 from schemas.activities_schema import (
     PaginatedActivitiesResponse as PaginatedActivitiesResponseSchema,
@@ -44,6 +47,21 @@ async def get_activities_api(
     current_user=Depends(get_current_user),
     page: int = 1,
     limit: Annotated[int, Query(gt=0, lt=100)] = 10,
+    category: Literal[
+        "ALL",
+        "EXPENSE",
+        "GROUP_EXPENSE",
+        "SETTLEMENT",
+        "EXPENSEWISE_SETTLEMENT",
+        "GROUPWISE_SETTLEMENT",
+        "OVERALL_SETTLEMENT",
+        "FRIEND",
+        "GROUP",
+        "USER"
+    ] = "ALL",
+    performed_by_me: bool | None = None,
+    group_id: int | None = None,
+    action: str | None = None
 ):
     # type
     # group_id
@@ -65,14 +83,14 @@ async def get_activities_api(
         ExpenseHistory.group_id.label("group_id"),
         cast(ExpenseHistory.action, String).label("action"),
         ExpenseHistory.performed_by.label("performed_by"),
-        literal(None).label("affected_user"),
-        literal(None).label("affected_guest"),
+        cast(None, Integer).label("affected_user"),
+        cast(None, String).label("affected_guest"),
         case(
             (ExpenseHistory.performed_by == current_user.id, literal(True)),
             else_=literal(False),
         ).label("performed_by_me"),
         ExpenseHistory.performed_at.label("performed_at"),
-        literal(None).label("amount_settled"),
+        cast(None, Numeric(10, 2)).label("amount_settled"),
     ).where(
         ExpenseHistory.expense_id.in_(
             select(ExpenseSplits.expense_id)
@@ -83,9 +101,9 @@ async def get_activities_api(
 
     settlement_query = select(
         case(
-            (Settlement.expense_id != None, literal("EXPENSEWISE SETTLEMENT")),
-            (Settlement.group_id != None, literal("GROUPWISE SETTLEMENT")),
-            else_=literal("OVERALL SETTLEMENT"),
+            (Settlement.expense_id != None, literal("EXPENSEWISE_SETTLEMENT")),
+            (Settlement.group_id != None, literal("GROUPWISE_SETTLEMENT")),
+            else_=literal("OVERALL_SETTLEMENT"),
         ).label("type"),
         Settlement.group_id.label("group_id"),
         case(
@@ -94,7 +112,7 @@ async def get_activities_api(
         ).label("action"),
         Settlement.from_user.label("performed_by"),
         Settlement.to_user.label("affected_user"),
-        literal(None).label("affected_guest"),
+        cast(None, String).label("affected_guest"),
         case(
             (Settlement.from_user == current_user.id, literal(True)),
             else_=literal(False),
@@ -109,8 +127,8 @@ async def get_activities_api(
     )
 
     friends_query = select(
-        literal("FRIENDS").label("type"),
-        literal(None).label("group_id"),
+        literal("FRIEND").label("type"),
+        cast(None, Integer).label("group_id"),
         cast(FriendsHistory.action, String).label("action"),
         FriendsHistory.performed_by.label("performed_by"),
         case(
@@ -129,14 +147,14 @@ async def get_activities_api(
         ).label("affected_user"),
         case(
             (FriendsHistory.guest_invitee.is_not(None), FriendsHistory.guest_invitee),
-            else_=literal(None),
+            else_=cast(None, String),
         ).label("affected_guest"),
         case(
             (FriendsHistory.performed_by == current_user.id, literal(True)),
             else_=literal(False),
         ).label("performed_by_me"),
         FriendsHistory.performed_at.label("performed_at"),
-        literal(None).label("amount_settled"),
+        cast(None, Numeric(10, 2)).label("amount_settled"),
     ).where(
         or_(
             # only show to sender
@@ -177,7 +195,7 @@ async def get_activities_api(
                     GroupHistory.action == GroupHistoryAction.GROUP_UPDATED,
                     GroupHistory.action == GroupHistoryAction.MEMBER_LEFT,
                 ),
-                literal(None),
+                cast(None, Integer),
             ),
             (
                 or_(
@@ -194,14 +212,14 @@ async def get_activities_api(
         ).label("affected_user"),
         case(
             (GroupHistory.guest_invitee.is_not(None), GroupHistory.guest_invitee),
-            else_=literal(None),
+            else_=cast(None, String),
         ).label("affected_guest"),
         case(
             (GroupHistory.performed_by == current_user.id, literal(True)),
             else_=literal(False),
         ).label("performed_by_me"),
         GroupHistory.performed_at.label("performed_at"),
-        literal(None).label("amount_settled"),
+        cast(None, Numeric(10, 2)).label("amount_settled"),
     ).where(
         or_(
             GroupHistory.group_id.in_(
@@ -214,32 +232,88 @@ async def get_activities_api(
 
     user_query = select(
         literal("USER").label("type"),
-        literal(None).label("group_id"),
+        cast(None, Integer).label("group_id"),
         cast(UserHistory.action, String).label("action"),
         UserHistory.user_id.label("performed_by"),
-        literal(None).label("affected_user"),
-        literal(None).label("affected_guest"),
+        cast(None, Integer).label("affected_user"),
+        cast(None, String).label("affected_guest"),
         literal(True).label("performed_by_me"),
         UserHistory.performed_at.label("performed_at"),
-        literal(None).label("amount_settled"),
+        cast(None, Numeric(10, 2)).label("amount_settled"),
+    ).where(
+        UserHistory.user_id == current_user.id
     )
 
-    activities = union_all(
-        expense_query, settlement_query, friends_query, group_query, user_query
-    ).subquery()
+    query = []
+    
+    if category == "ALL":
+        query = [expense_query, settlement_query, friends_query, group_query, user_query]
+    elif category == "EXPENSE":
+        query = [expense_query.where(
+            ExpenseHistory.group_id.is_(None)
+        )]
+    elif category == "GROUP_EXPENSE":
+        query = [expense_query.where(
+            ExpenseHistory.group_id.is_not(None)
+        )]
+    elif category == "SETTLEMENT":
+        query = [settlement_query]
+    elif category == "EXPENSEWISE_SETTLEMENT":
+        query = [settlement_query.where(
+            Settlement.expense_id.is_not(None)
+        )]     
+    elif category == "GROUPWISE_SETTLEMENT":
+        query = [settlement_query.where(
+            Settlement.group_id.is_not(None)
+        )]     
+    elif category == "OVERALL_SETTLEMENT":
+        query = [settlement_query.where(
+            Settlement.expense_id.is_(None),
+            Settlement.group_id.is_(None),
+        )]     
+    elif category == "FRIEND":
+        query = [friends_query]
+    elif category == "GROUP":
+        query = [group_query]
+    elif category == "USER":
+        query = [user_query]
+        
 
-    result = await db.execute(select(func.count()).select_from(activities))
-    total_activities = result.scalar_one()
-
+    activities = union_all(*query).subquery()
+    
     PerformedBy = aliased(User, name="performed_by_user")
     AffectedUser = aliased(User, name="affected_user_obj")
-
-    skip = limit * (page - 1)
-    result = await db.execute(
+    
+    activity_query = (
         select(activities, PerformedBy, AffectedUser, Group)
         .outerjoin(PerformedBy, PerformedBy.id == activities.c.performed_by)
         .outerjoin(AffectedUser, AffectedUser.id == activities.c.affected_user)
         .outerjoin(Group, Group.id == activities.c.group_id)
+    )
+    
+    if performed_by_me is not None:
+        activity_query = activity_query.where(
+            activities.c.performed_by_me == performed_by_me
+        )
+        
+    if group_id is not None:
+        activity_query = activity_query.where(
+            activities.c.group_id == group_id
+        )
+        
+    if action is not None:
+        activity_query = activity_query.where(
+            activities.c.action == action
+        )
+    
+
+    total_query = (select(func.count()).select_from(activity_query.subquery()))
+    result = await db.execute(total_query)
+    total_activities = result.scalar_one()
+
+    skip = limit * (page - 1)
+    result = await db.execute(
+        activity_query
         .order_by(activities.c.performed_at.desc())
         .offset(skip)
         .limit(limit)
