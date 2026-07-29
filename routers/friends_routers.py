@@ -351,7 +351,7 @@ async def get_friend(
     friend_settlement_data = response["friend_settlement_data"]
     
     # groups in which you're included
-    groups_you_are_included = select(GroupMember.group_id).where(GroupMember.user_id == current_user.id)
+    groups_you_are_included = select(GroupMember.group_id).join(Group).where(GroupMember.user_id == current_user.id, Group.is_deleted.is_(False))
 
     # groups in which you and your friend both are included
     result = await db.execute(
