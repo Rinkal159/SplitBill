@@ -581,12 +581,20 @@ class Group(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(String(1000), nullable=True)
+    group_picture: Mapped[str] = mapped_column(String(500), nullable=True)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
     
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    @property
+    def group_picture_url(self):
+        if self.group_picture:
+            url, _ = cloudinary_url(self.group_picture)
+            return url
+        return None
 
     # who created this group
     creator: Mapped["User"] = relationship(
@@ -735,8 +743,13 @@ class GroupInvitation(Base):
 
 class GroupHistoryAction(str, Enum):
     GROUP_CREATED="GROUP_CREATED"
+    GROUP_UPDATED="GROUP_UPDATED"
     GROUP_INVITATION_SENT="GROUP_INVITATION_SENT"
     GROUP_INVITATION_ACCEPTED="GROUP_INVITATION_ACCEPTED"
+    GROUP_INVITATION_CANCELLED="GROUP_INVITATION_CANCELLED"
+    MEMBER_LEFT="MEMBER_LEFT"
+    MEMBER_REMOVED="MEMBER_REMOVED"
+    ADMIN_TRANSFERRED="ADMIN_TRANSFERRED"
     
     
 class GroupHistory(Base):
