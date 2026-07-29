@@ -1,5 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response, UploadFile, File
-from sqlalchemy import select, delete
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    status,
+    Response,
+    UploadFile,
+    File,
+    Query,
+)
+from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from auth.authentication import get_current_user
@@ -13,17 +22,29 @@ from utils.get_all_expenses_in_which_user_involved import (
     get_all_expenses_in_which_user_involved,
 )
 from utils.friendship_checks import friendship_checks
-from services.cloudinary import upload_picture_on_cloudinary, delete_picture_from_cloudinary
+from services.cloudinary import (
+    upload_picture_on_cloudinary,
+    delete_picture_from_cloudinary,
+)
+from typing import Annotated
 
 from schemas.expense_schema import (
     ExpenseCreate as ExpenseCreateSchema,
     ExpenseCreateResponse as ExpenseCreateResponseSchema,
-    ExpensesResponse as ExpenseResponseSchema,
+    ExpenseSchema as SingleExpenseResponseSchema,
+    PaginatedExpensesResponse as PaginatedExpensesResponseSchema,
     BorrowingsAndLendings as BorrowingsAndLendingsSchema,
     FriendsSettlementsResponse as FriendsSettlementsResponseSchema,
     UserDetail as UserDetailSchema,
 )
-from model import Expense, ExpenseSplits, ExpenseHistory, ExpenseHistoryAction, GroupMember, Group
+from model import (
+    Expense,
+    ExpenseSplits,
+    ExpenseHistory,
+    ExpenseHistoryAction,
+    GroupMember,
+    Group,
+)
 
 expense_router = APIRouter(prefix="/api/expenses", tags=["Expenses"])
 
@@ -97,22 +118,39 @@ async def add_expense_api(
 
 
 # * upload attachment (receipt) of the expense
-@expense_router.post("/{expense_id}/attachment", response_model=ExpenseCreateResponseSchema)
-async def upload_receipt_api(expense_id: int, attachment: UploadFile | None = File(None), db: AsyncSession=Depends(get_db), current_user=Depends(get_current_user)):
+@expense_router.post(
+    "/{expense_id}/attachment", response_model=ExpenseCreateResponseSchema
+)
+async def upload_receipt_api(
+    expense_id: int,
+    attachment: UploadFile | None = File(None),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     try:
         # expense not exist
         result = await db.execute(select(Expense).where(Expense.id == expense_id))
         existed_expense = result.scalars().one_or_none()
 
         if not existed_expense:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found"
+            )
 
         # you're not a participant of that expense
-        result = await db.execute(select(ExpenseSplits).where(ExpenseSplits.expense_id == expense_id, ExpenseSplits.user_id==current_user.id))
+        result = await db.execute(
+            select(ExpenseSplits).where(
+                ExpenseSplits.expense_id == expense_id,
+                ExpenseSplits.user_id == current_user.id,
+            )
+        )
         existed_participant = result.scalars().one_or_none()
 
         if not existed_participant:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to upload attachments")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to upload attachments",
+            )
 
         # attachment already uploaded
         if existed_expense.attachment:
@@ -121,7 +159,9 @@ async def upload_receipt_api(expense_id: int, attachment: UploadFile | None = Fi
         # storing attachment in database (in expense table)
         if attachment:
             if attachment.filename:
-                attachment_public_id = upload_picture_on_cloudinary(file=attachment, folder="expense_attachments")
+                attachment_public_id = upload_picture_on_cloudinary(
+                    file=attachment, folder="expense_attachments"
+                )
                 existed_expense.attachment = attachment_public_id
 
         await db.commit()
@@ -129,27 +169,41 @@ async def upload_receipt_api(expense_id: int, attachment: UploadFile | None = Fi
     except:
         await db.rollback()
         raise
-    
+
     return existed_expense
-    
+
 
 # * get single expense
-@expense_router.get("/{expense_id}", response_model=ExpenseResponseSchema)
-async def get_single_expense(expense_id: int, db: AsyncSession=Depends(get_db),current_user=Depends(get_current_user)):
+@expense_router.get("/{expense_id}", response_model=SingleExpenseResponseSchema)
+async def get_single_expense(
+    expense_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     # expense not exist
     result = await db.execute(select(Expense).where(Expense.id == expense_id))
     existed_expense = result.scalars().one_or_none()
-    
+
     if not existed_expense:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
-    
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found"
+        )
+
     # you're not involved in that expense
-    result = await db.execute(select(ExpenseSplits).where(ExpenseSplits.expense_id == expense_id, ExpenseSplits.user_id == current_user.id))
+    result = await db.execute(
+        select(ExpenseSplits).where(
+            ExpenseSplits.expense_id == expense_id,
+            ExpenseSplits.user_id == current_user.id,
+        )
+    )
     existed_expense_split = result.scalars().one_or_none()
-    
+
     if not existed_expense_split:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You're not involved in this expense")
-    
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You're not involved in this expense",
+        )
+
     # get settlements for this expense
     settlements = await get_all_expenses_in_which_user_involved(
         expense_ids=[expense_id], db=db, current_user=current_user
@@ -158,34 +212,62 @@ async def get_single_expense(expense_id: int, db: AsyncSession=Depends(get_db),c
     return {"expenses": settlements}
 
 
-# * get all expenses in which you're involved - All expenses
-@expense_router.get("/", response_model=ExpenseResponseSchema)
+# * get all expenses in which you're involved - All expenses - PAGINATED
+@expense_router.get("/", response_model=PaginatedExpensesResponseSchema)
 async def get_all_expenses_api(
-    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+    page: int = 1,
+    limit: Annotated[int, Query(gt=0, lt=100)] = 10,
 ):
+    skip = limit * (page - 1)
+
+    result = await db.execute(
+        select(func.count(func.distinct(ExpenseSplits.expense_id))).where(
+            ExpenseSplits.user_id == current_user.id
+        )
+    )
+    total_count = result.scalar_one()
+
     # get all expenses in which you're involved
     result = await db.execute(
-        select(ExpenseSplits.expense_id).where(ExpenseSplits.user_id == current_user.id)
+        select(ExpenseSplits.expense_id)
+        .where(ExpenseSplits.user_id == current_user.id)
+        .distinct()
+        .offset(skip)
+        .limit(limit)
     )
     expense_ids = result.scalars().all()
 
-    settlements = await get_all_expenses_in_which_user_involved(
+    expenses = await get_all_expenses_in_which_user_involved(
         expense_ids=expense_ids, db=db, current_user=current_user
     )
 
-    return {"expenses": settlements}
+    return {
+        "expenses": expenses,
+        "page": page,
+        "skip": skip,
+        "limit": limit,
+        "has_more": skip + len(expenses) < total_count,
+    }
 
 
-# * get all group expenses - All group expenses
-@expense_router.get("/groups/{group_id}", response_model=ExpenseResponseSchema)
+# * get all group expenses - All group expenses - PAGINATED
+@expense_router.get(
+    "/groups/{group_id}", response_model=PaginatedExpensesResponseSchema
+)
 async def get_all_group_expenses_api(
     group_id: int,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
+    page: int = 1,
+    limit: Annotated[int, Query(gt=0, lt=100)] = 10,
 ):
 
     # group doesn't exist
-    result = await db.execute(select(Group).where(Group.id == group_id, Group.is_deleted.is_(False)))
+    result = await db.execute(
+        select(Group).where(Group.id == group_id, Group.is_deleted.is_(False))
+    )
     existed_group = result.scalars().one_or_none()
 
     if not existed_group:
@@ -207,18 +289,37 @@ async def get_all_group_expenses_api(
             detail="You're not a member of this group",
         )
 
-    # get all group expenses
+    skip = limit * (page - 1)
+
+    # get the total count of group expenses
+    result = await db.execute(
+        select(func.count(func.distinct(Expense.id))).where(
+            Expense.group_id == group_id
+        )
+    )
+    total_count = result.scalar_one()
+
+    # get paginated group expenses ids
     result = await db.execute(
         select(Expense.id)
         .where(Expense.group_id == group_id)
+        .distinct()
+        .offset(skip)
+        .limit(limit)
     )
     expense_ids = result.scalars().all()
 
-    settlements = await get_all_expenses_in_which_user_involved(
+    expenses = await get_all_expenses_in_which_user_involved(
         expense_ids=expense_ids, db=db, current_user=current_user
     )
 
-    return {"expenses": settlements}
+    return {
+        "expenses": expenses,
+        "page": page,
+        "skip": skip,
+        "limit": limit,
+        "has_more": skip + len(expenses) < total_count,
+    }
 
 
 # * get all your borrowings and lendings - Dashboard
@@ -331,7 +432,9 @@ async def get_friends_settlements_api(
     current_user=Depends(get_current_user),
 ):
     # friend settlement data
-    response = await friendship_checks(db=db, current_user=current_user, friend_id=friend_id)
+    response = await friendship_checks(
+        db=db, current_user=current_user, friend_id=friend_id
+    )
     return response["friend_settlement_data"]
 
 
