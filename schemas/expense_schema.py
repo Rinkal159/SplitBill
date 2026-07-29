@@ -89,6 +89,14 @@ class ExpenseSchema(Base):
 
 class ExpensesResponse(Base):
     expenses: list[ExpenseSchema]
+    
+    
+class PaginatedExpensesResponse(Base):
+    expenses: ExpensesResponse
+    page: int
+    skip: int
+    limit: int
+    has_more: bool
 
 
 # * BorrowingsAndLendings
