@@ -1,7 +1,5 @@
 from fastapi import HTTPException, status
 from decimal import Decimal
-from model import GroupMember
-from sqlalchemy import select
 from utils.validate_participants_are_group_members import are_group_members
 
 
