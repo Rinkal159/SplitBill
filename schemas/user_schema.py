@@ -14,7 +14,7 @@ class UserCreate(Base):
     name: Annotated[str, Field(min_length=4, max_length=100)]
     email: EmailStr
     password: Annotated[str, Field(min_length=8)]
-    mobile_number: Annotated[str, Field(min_length=10, max_length=10)]
+    mobile_number: Annotated[str, Field(min_length=10, max_length=10, pattern=r"^\d{10}$")]
 
     @classmethod
     def as_form(
