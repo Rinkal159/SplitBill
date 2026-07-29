@@ -118,7 +118,7 @@ async def get_activities_api(
                 or_(
                     FriendsHistory.action == FriendsHistoryAction.REQUEST_SENT,
                     FriendsHistory.action == FriendsHistoryAction.FRIEND_REMOVED,
-                    FriendsHistory.action == FriendsHistoryAction.REQUEST_CANCELLED
+                    FriendsHistory.action == FriendsHistoryAction.REQUEST_CANCELLED,
                 ),
                 FriendsHistory.receiver_id,
             ),
@@ -139,8 +139,29 @@ async def get_activities_api(
         literal(None).label("amount_settled"),
     ).where(
         or_(
-            FriendsHistory.sender_id == current_user.id,
-            FriendsHistory.receiver_id == current_user.id,
+            # only show to sender
+            and_(
+                FriendsHistory.performed_by == current_user.id,
+                FriendsHistory.action.in_(
+                    [
+                        FriendsHistoryAction.REQUEST_SENT,
+                        FriendsHistoryAction.REQUEST_CANCELLED,
+                    ]
+                ),
+            ),
+            # show to both
+            and_(
+                or_(
+                    FriendsHistory.sender_id == current_user.id,
+                    FriendsHistory.receiver_id == current_user.id,
+                ),
+                FriendsHistory.action.in_(
+                    [
+                        FriendsHistoryAction.REQUEST_ACCEPTED,
+                        FriendsHistoryAction.FRIEND_REMOVED,
+                    ]
+                ),
+            ),
         )
     )
 
@@ -150,9 +171,20 @@ async def get_activities_api(
         cast(GroupHistory.action, String).label("action"),
         GroupHistory.performed_by.label("performed_by"),
         case(
-            (GroupHistory.action == GroupHistoryAction.GROUP_CREATED, literal(None)),
             (
-                GroupHistory.action == GroupHistoryAction.GROUP_INVITATION_SENT,
+                or_(
+                    GroupHistory.action == GroupHistoryAction.GROUP_CREATED,
+                    GroupHistory.action == GroupHistoryAction.GROUP_UPDATED,
+                    GroupHistory.action == GroupHistoryAction.MEMBER_LEFT,
+                ),
+                literal(None),
+            ),
+            (
+                or_(
+                    GroupHistory.action == GroupHistoryAction.GROUP_INVITATION_SENT,
+                    GroupHistory.action == GroupHistoryAction.MEMBER_REMOVED,
+                    GroupHistory.action == GroupHistoryAction.ADMIN_TRANSFERRED
+                ),
                 GroupHistory.receiver_id,
             ),
             (
@@ -172,17 +204,11 @@ async def get_activities_api(
         literal(None).label("amount_settled"),
     ).where(
         or_(
-            # User is already a member
             GroupHistory.group_id.in_(
                 select(GroupMember.group_id).where(
                     GroupMember.user_id == current_user.id
                 )
-            ),
-            # User is NOT a member but was invited
-            and_(
-                GroupHistory.action == GroupHistoryAction.GROUP_INVITATION_SENT,
-                GroupHistory.receiver_id == current_user.id,
-            ),
+            )
         )
     )
 
