@@ -176,7 +176,7 @@ async def get_all_expenses_api(
     return {"expenses": settlements}
 
 
-# * get all group expenses in which you're involved - All group expenses
+# * get all group expenses - All group expenses
 @expense_router.get("/groups/{group_id}", response_model=ExpenseResponseSchema)
 async def get_all_group_expenses_api(
     group_id: int,
@@ -185,7 +185,7 @@ async def get_all_group_expenses_api(
 ):
 
     # group doesn't exist
-    result = await db.execute(select(Group).where(Group.id == group_id))
+    result = await db.execute(select(Group).where(Group.id == group_id, Group.is_deleted.is_(False)))
     existed_group = result.scalars().one_or_none()
 
     if not existed_group:
@@ -207,12 +207,10 @@ async def get_all_group_expenses_api(
             detail="You're not a member of this group",
         )
 
-    # get all group expenses in which you're involved
+    # get all group expenses
     result = await db.execute(
         select(Expense.id)
-        .distinct()
-        .join(ExpenseSplits)
-        .where(Expense.group_id == group_id, ExpenseSplits.user_id == current_user.id)
+        .where(Expense.group_id == group_id)
     )
     expense_ids = result.scalars().all()
 
