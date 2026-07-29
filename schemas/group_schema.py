@@ -37,6 +37,12 @@ class GroupUpdate(Base):
     name: Annotated[str | None, Field(min_length=4, max_length=100)] = None
     description: Annotated[str | None, Field(min_length=10, max_length=1000)] = None
     
+    @classmethod
+    def as_form(cls, name, description):
+        return cls(
+            name=name,
+            description=description
+        )
     
 # * AdditionalInvitations
 class AdditionalInvitations(Base):
@@ -54,6 +60,7 @@ class GroupDetail(Base):
     id: int
     name: str
     description: str | None
+    group_picture: str | None
     creator: UserDetail
 
 
@@ -88,6 +95,12 @@ class GroupResponse(Base):
     group: GroupDetailWithMembers
     role: GroupMemberRole
     joined_at: datetime
+    
+    
+# * SingleGroupResponse
+class SingleGroupResponse(Base):
+    group:  GroupDetailWithMembers
+    total_members: int
 
 
 #* ExpenseWithSpecificMemberResponse
