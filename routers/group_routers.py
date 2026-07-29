@@ -248,7 +248,7 @@ async def get_group_api(
 
 # * update group info
 @group_router.patch("/{group_id}")
-async def add_members_api(
+async def update_group_api(
     group_id: int,
     group: GroupUpdateSchema = Depends(GroupUpdateSchema.as_form),
     groupPicture: UploadFile | None = File(None),
@@ -977,7 +977,7 @@ async def remove_group_member_api(
 
 # * promote a member to admin
 @group_router.patch("/{group_id}/members/{user_id}")
-async def promote_as_admin_api(
+async def admin_transfered_api(
     group_id: int,
     user_id: int,
     db: AsyncSession = Depends(get_db),

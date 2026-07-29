@@ -304,7 +304,7 @@ async def get_friends_api(
 
 
 # * remove a friend
-@friends_router.delete("/remove/{friend_id}")
+@friends_router.delete("/{friend_id}")
 async def remove_friend_api(
     friend_id: int,
     db: AsyncSession = Depends(get_db),

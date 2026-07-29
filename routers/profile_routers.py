@@ -12,7 +12,7 @@ from schemas.user_schema import UserResponse as ProfileUpdateResponseSchema
 profile_router = APIRouter(prefix="/api/users/profile", tags=["Profile"])
 
 #* update name or profile picture
-@profile_router.patch("/edit", response_model=ProfileUpdateResponseSchema)
+@profile_router.patch("/", response_model=ProfileUpdateResponseSchema)
 async def edit_profile_api(
     profile: ProfileUpdateSchema = Depends(ProfileUpdateSchema.as_form),
     profilePicture: UploadFile | None = File(None),
