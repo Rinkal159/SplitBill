@@ -1,6 +1,6 @@
 from fastapi import HTTPException, status
 from decimal import Decimal
-from Backend_SplitBill.utils.validate_participants_are_group_members import are_group_members
+from backend_splitbill.utils.validate_participants_are_group_members import are_group_members
 
 
 async def validate_payments_and_splits(

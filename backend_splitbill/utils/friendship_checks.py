@@ -1,7 +1,7 @@
 from sqlalchemy import select, and_, or_
 from fastapi import HTTPException, status
-from Backend_SplitBill.model import User, Friends
-from Backend_SplitBill.utils.get_friend_settlement_data import get_friend_settlement_data
+from backend_splitbill.model import User, Friends
+from backend_splitbill.utils.get_friend_settlement_data import get_friend_settlement_data
 
 async def friendship_checks(db, current_user, friend_id):
     # friend not exist

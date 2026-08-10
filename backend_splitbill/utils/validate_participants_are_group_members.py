@@ -1,4 +1,4 @@
-from Backend_SplitBill.model import GroupMember
+from backend_splitbill.model import GroupMember
 from sqlalchemy import select
 from fastapi import HTTPException
 

@@ -1,8 +1,8 @@
 from sqlalchemy import select
-from Backend_SplitBill.model import Group, GroupMember, Expense, User
+from backend_splitbill.model import Group, GroupMember, Expense, User
 from fastapi import HTTPException, status
-from Backend_SplitBill.utils.get_expense_groups import get_expense_groups
-from Backend_SplitBill.utils.get_main_settlement_logic import get_main_settlement_logic
+from backend_splitbill.utils.get_expense_groups import get_expense_groups
+from backend_splitbill.utils.get_main_settlement_logic import get_main_settlement_logic
 
 
 async def get_member_settlement_data(group_id: int, user_id: int, db, current_user):

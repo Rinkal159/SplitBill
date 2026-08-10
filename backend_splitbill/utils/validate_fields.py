@@ -1,5 +1,5 @@
-from Backend_SplitBill.utils.validate_participants import validate_participants
-from Backend_SplitBill.utils.validations_on_expense import validate_payments_and_splits
+from backend_splitbill.utils.validate_participants import validate_participants
+from backend_splitbill.utils.validations_on_expense import validate_payments_and_splits
 from fastapi import  HTTPException, status
 from decimal import Decimal
 

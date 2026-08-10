@@ -1,4 +1,4 @@
-from Backend_SplitBill.utils.get_settlement_groups import get_settlement_groups
+from backend_splitbill.utils.get_settlement_groups import get_settlement_groups
 from decimal import Decimal
 
 async def get_settlement_creditors_debtors(splits, db, creditors, debtors):

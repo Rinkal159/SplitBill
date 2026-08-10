@@ -1,9 +1,9 @@
 from fastapi import FastAPI
-from Backend_SplitBill.routers import activities_routers, auth_routers, expense_routers, friends_routers, group_routers, history_routers, profile_routers
-from Backend_SplitBill.routers import (
+from backend_splitbill.routers import activities_routers, auth_routers, expense_routers, friends_routers, group_routers, history_routers, profile_routers
+from backend_splitbill.routers import (
     settlements_routers
 )
-from Backend_SplitBill.exception_handling.exception_handlers import handlers
+from backend_splitbill.exception_handling.exception_handlers import handlers
 
 app = FastAPI()
 

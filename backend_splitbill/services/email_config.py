@@ -1,5 +1,5 @@
 from fastapi_mail import ConnectionConfig
-from Backend_SplitBill.env_config import settings
+from backend_splitbill.env_config import settings
 from pydantic import SecretStr
 
 config = ConnectionConfig(

@@ -1,10 +1,10 @@
 from sqlalchemy import select, update
-from Backend_SplitBill.services.otp_generation import generate_otp
-from Backend_SplitBill.services.email_generation import send_mail
+from backend_splitbill.services.otp_generation import generate_otp
+from backend_splitbill.services.email_generation import send_mail
 from datetime import datetime, timedelta, UTC
-from Backend_SplitBill.services.hash_password_otp import hash
+from backend_splitbill.services.hash_password_otp import hash
 
-from Backend_SplitBill.model import User, PasswordResetOTP
+from backend_splitbill.model import User, PasswordResetOTP
 
 async def forgot_password(db, email):
     user = await db.execute(select(User).where(User.email == email.email))

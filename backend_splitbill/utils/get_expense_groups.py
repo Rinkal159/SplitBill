@@ -1,6 +1,6 @@
 from sqlalchemy import select
 from collections import defaultdict
-from Backend_SplitBill.model import ExpenseSplits
+from backend_splitbill.model import ExpenseSplits
 from sqlalchemy.orm import selectinload
 
 async def get_expense_groups(expense_ids, db, newest_first):

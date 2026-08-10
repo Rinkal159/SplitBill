@@ -1,5 +1,5 @@
 import cloudinary
-from Backend_SplitBill.env_config import settings
+from backend_splitbill.env_config import settings
 import cloudinary.uploader
 from fastapi import HTTPException, status
 

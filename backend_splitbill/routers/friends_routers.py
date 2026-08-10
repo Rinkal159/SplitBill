@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from Backend_SplitBill.database import get_db
+from backend_splitbill.database import get_db
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
-from Backend_SplitBill.auth.authentication import get_current_user
+from backend_splitbill.auth.authentication import get_current_user
 from decimal import Decimal
-from Backend_SplitBill.utils.friendship_checks import friendship_checks
+from backend_splitbill.utils.friendship_checks import friendship_checks
 
-from Backend_SplitBill.schemas.friends_schema import (
+from backend_splitbill.schemas.friends_schema import (
     InvitationCreate as InvitationCreateSchema,
     InvitationsResponse as InvitationsResponseSchema,
     InvitationUpdateStatus as InvitationUpdateStatusSchema,
@@ -14,7 +14,7 @@ from Backend_SplitBill.schemas.friends_schema import (
     UserDetail as UserDetailSchema,
     FriendProfileResponse as FriendProfileResponseSchema
 )
-from Backend_SplitBill.model import (
+from backend_splitbill.model import (
     User,
     Invitation,
     Friends,

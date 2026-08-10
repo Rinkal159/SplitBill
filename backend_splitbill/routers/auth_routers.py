@@ -1,17 +1,17 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Cookie
-from Backend_SplitBill.database import get_db
+from backend_splitbill.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_, update, delete
-from Backend_SplitBill.services.cloudinary import upload_picture_on_cloudinary
-from Backend_SplitBill.services.hash_password_otp import hash, verify
-from Backend_SplitBill.auth.authentication import create_token
+from backend_splitbill.services.cloudinary import upload_picture_on_cloudinary
+from backend_splitbill.services.hash_password_otp import hash, verify
+from backend_splitbill.auth.authentication import create_token
 from fastapi.responses import JSONResponse
-from Backend_SplitBill.auth.authentication import get_current_user
+from backend_splitbill.auth.authentication import get_current_user
 from datetime import datetime, UTC
-from Backend_SplitBill.auth.authentication import verify_token
-from Backend_SplitBill.utils.forgot_password import forgot_password
+from backend_splitbill.auth.authentication import verify_token
+from backend_splitbill.utils.forgot_password import forgot_password
 
-from Backend_SplitBill.schemas.user_schema import (
+from backend_splitbill.schemas.user_schema import (
     UserCreate as UserCreateSchema,
     UserLogin as UserLoginSchema,
     UserResponse as UserResponseSchema,
@@ -19,7 +19,7 @@ from Backend_SplitBill.schemas.user_schema import (
     VerifyOTP as VerifyOTPSchema,
     ResetPassword as ResetPasswordSchema,
 )
-from Backend_SplitBill.model import (
+from backend_splitbill.model import (
     User,
     Invitation,
     FriendsHistory,

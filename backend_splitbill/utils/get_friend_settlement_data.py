@@ -1,16 +1,16 @@
 from sqlalchemy import select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, HTTPException, status
-from Backend_SplitBill.database import get_db
-from Backend_SplitBill.auth.authentication import get_current_user
+from backend_splitbill.database import get_db
+from backend_splitbill.auth.authentication import get_current_user
 from sqlalchemy.orm import selectinload
-from Backend_SplitBill.utils.get_expense_groups import get_expense_groups
-from Backend_SplitBill.utils.get_creditors_debtors import get_creditors_debtors
+from backend_splitbill.utils.get_expense_groups import get_expense_groups
+from backend_splitbill.utils.get_creditors_debtors import get_creditors_debtors
 from decimal import Decimal
-from Backend_SplitBill.utils.get_settlement_groups import get_settlement_groups
-from Backend_SplitBill.utils.get_main_settlement_logic import get_main_settlement_logic
+from backend_splitbill.utils.get_settlement_groups import get_settlement_groups
+from backend_splitbill.utils.get_main_settlement_logic import get_main_settlement_logic
 
-from Backend_SplitBill.model import Friends, ExpenseSplits, User
+from backend_splitbill.model import Friends, ExpenseSplits, User
 
 
 # need to think, this is specifically for friends so both users must have friendhsip to get balances

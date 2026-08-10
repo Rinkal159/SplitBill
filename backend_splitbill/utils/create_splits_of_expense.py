@@ -1,5 +1,5 @@
 from decimal import Decimal, ROUND_HALF_UP
-from Backend_SplitBill.model import ExpenseSplits
+from backend_splitbill.model import ExpenseSplits
 
 async def create_expense_splits(db, expense, participant_ids, expense_data):
         # should "equally" pay

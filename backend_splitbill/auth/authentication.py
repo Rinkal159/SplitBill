@@ -1,12 +1,12 @@
 from jose import jwt, ExpiredSignatureError, JWTError
 from datetime import datetime, timedelta, UTC
-from Backend_SplitBill.env_config import settings
-from Backend_SplitBill.utils.raise_exception import raise_exception
+from backend_splitbill.env_config import settings
+from backend_splitbill.utils.raise_exception import raise_exception
 from fastapi import status, Cookie, Depends
-from Backend_SplitBill.database import get_db
+from backend_splitbill.database import get_db
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from Backend_SplitBill.model import User
+from backend_splitbill.model import User
 
 def create_token(data: dict, expires_delta: int) -> str:
     payload = data.copy()

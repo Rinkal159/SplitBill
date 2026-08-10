@@ -13,7 +13,7 @@ from sqlalchemy import (
     Boolean
 )
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
-from Backend_SplitBill.env_config import settings
+from backend_splitbill.env_config import settings
 from datetime import datetime, date
 import asyncio
 from cloudinary.utils import cloudinary_url

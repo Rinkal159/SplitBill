@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from Backend_SplitBill.database import get_db
-from Backend_SplitBill.auth.authentication import get_current_user
-from Backend_SplitBill.services.cloudinary import delete_picture_from_cloudinary, upload_picture_on_cloudinary
-from Backend_SplitBill.services.hash_password_otp import hash, verify
+from backend_splitbill.database import get_db
+from backend_splitbill.auth.authentication import get_current_user
+from backend_splitbill.services.cloudinary import delete_picture_from_cloudinary, upload_picture_on_cloudinary
+from backend_splitbill.services.hash_password_otp import hash, verify
 
-from Backend_SplitBill.model import UserHistory, UserHistoryAction
-from Backend_SplitBill.schemas.profile_schema import (ProfileUpdate as ProfileUpdateSchema, ChangePassword as ChangePasswordSchema)
-from Backend_SplitBill.schemas.user_schema import UserResponse as ProfileUpdateResponseSchema
+from backend_splitbill.model import UserHistory, UserHistoryAction
+from backend_splitbill.schemas.profile_schema import (ProfileUpdate as ProfileUpdateSchema, ChangePassword as ChangePasswordSchema)
+from backend_splitbill.schemas.user_schema import UserResponse as ProfileUpdateResponseSchema
 
 profile_router = APIRouter(prefix="/api/users/profile", tags=["Profile"])
 

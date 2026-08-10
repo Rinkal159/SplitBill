@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from Backend_SplitBill.utils.validate_participants_are_group_members import are_group_members
+from backend_splitbill.utils.validate_participants_are_group_members import are_group_members
 
 
 async def validate_participants(group_id, db, participants_id_raw, participant_ids_set, current_user):

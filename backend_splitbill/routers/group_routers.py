@@ -1,22 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from Backend_SplitBill.database import get_db
-from Backend_SplitBill.auth.authentication import get_current_user
+from backend_splitbill.database import get_db
+from backend_splitbill.auth.authentication import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete
 from sqlalchemy.orm import selectinload
-from Backend_SplitBill.utils.get_member_settlement_data import get_member_settlement_data
-from Backend_SplitBill.utils.get_registered_and_guest_invitees_of_group import (
+from backend_splitbill.utils.get_member_settlement_data import get_member_settlement_data
+from backend_splitbill.utils.get_registered_and_guest_invitees_of_group import (
     get_registered_and_guest_invitees_of_group,
 )
-from Backend_SplitBill.services.cloudinary import (
+from backend_splitbill.services.cloudinary import (
     upload_picture_on_cloudinary,
     delete_picture_from_cloudinary,
 )
-from Backend_SplitBill.utils.get_expense_groups import get_expense_groups
-from Backend_SplitBill.utils.get_settlement_groups import get_settlement_groups
-from Backend_SplitBill.utils.get_creditors_debtors import get_creditors_debtors
+from backend_splitbill.utils.get_expense_groups import get_expense_groups
+from backend_splitbill.utils.get_settlement_groups import get_settlement_groups
+from backend_splitbill.utils.get_creditors_debtors import get_creditors_debtors
 
-from Backend_SplitBill.model import (
+from backend_splitbill.model import (
     Group,
     GroupMember,
     GroupMemberRole,
@@ -27,7 +27,7 @@ from Backend_SplitBill.model import (
     Expense,
     ExpenseSplits,
 )
-from Backend_SplitBill.schemas.group_schema import (
+from backend_splitbill.schemas.group_schema import (
     GroupCreate as GroupCreateSchema,
     GroupUpdate as GroupUpdateSchema,
     AdditionalInvitations as AdditionalInvitationsSchema,

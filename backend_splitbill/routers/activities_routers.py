@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
-from Backend_SplitBill.auth.authentication import get_current_user
-from Backend_SplitBill.database import get_db
+from backend_splitbill.auth.authentication import get_current_user
+from backend_splitbill.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import (
     select,
@@ -20,10 +20,10 @@ from typing import Annotated, Literal
 from sqlalchemy.orm import aliased
 from enum import Enum
 
-from Backend_SplitBill.schemas.activities_schema import (
+from backend_splitbill.schemas.activities_schema import (
     PaginatedActivitiesResponse as PaginatedActivitiesResponseSchema,
 )
-from Backend_SplitBill.model import (
+from backend_splitbill.model import (
     ExpenseHistory,
     Settlement,
     FriendsHistory,

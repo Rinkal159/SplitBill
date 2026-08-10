@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
-from Backend_SplitBill.database import get_db
-from Backend_SplitBill.auth.authentication import get_current_user
+from backend_splitbill.database import get_db
+from backend_splitbill.auth.authentication import get_current_user
 
-from Backend_SplitBill.model import ExpenseHistory, Settlement, FriendsHistory
-from Backend_SplitBill.schemas.history_schema import (
+from backend_splitbill.model import ExpenseHistory, Settlement, FriendsHistory
+from backend_splitbill.schemas.history_schema import (
     ExpenseHistoryResponse as ExpenseHistoryResponseSchema,
     SettlementHistoryResponse as SettlementHistoryResponseSchema,
     FriendsHistory as FriendsHistoryResponseSchema

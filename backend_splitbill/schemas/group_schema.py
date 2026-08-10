@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict, EmailStr, model_validator
 from typing import Annotated
-from Backend_SplitBill.model import InvitationStatus, GroupMemberRole
+from backend_splitbill.model import InvitationStatus, GroupMemberRole
 from enum import Enum
 from datetime import datetime, date
 from decimal import Decimal

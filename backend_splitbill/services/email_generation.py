@@ -1,5 +1,5 @@
 from fastapi_mail import FastMail, MessageSchema, MessageType
-from Backend_SplitBill.services.email_config import config
+from backend_splitbill.services.email_config import config
 
 async def send_mail(email, otp):
     message = MessageSchema(

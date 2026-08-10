@@ -1,5 +1,5 @@
 from sqlalchemy import select
-from Backend_SplitBill.model import SettlementSplits
+from backend_splitbill.model import SettlementSplits
 from collections import defaultdict
 from sqlalchemy.orm import selectinload
 

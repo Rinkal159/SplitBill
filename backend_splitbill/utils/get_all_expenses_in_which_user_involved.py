@@ -1,7 +1,7 @@
-from Backend_SplitBill.utils.get_expense_groups import get_expense_groups
-from Backend_SplitBill.utils.get_settlement_groups import get_settlement_groups
-from Backend_SplitBill.utils.get_creditors_debtors import get_creditors_debtors
-from Backend_SplitBill.schemas.expense_schema import UserDetail as UserDetailSchema
+from backend_splitbill.utils.get_expense_groups import get_expense_groups
+from backend_splitbill.utils.get_settlement_groups import get_settlement_groups
+from backend_splitbill.utils.get_creditors_debtors import get_creditors_debtors
+from backend_splitbill.schemas.expense_schema import UserDetail as UserDetailSchema
 from decimal import Decimal
 
 async def get_all_expenses_in_which_user_involved(expense_ids, db, current_user):

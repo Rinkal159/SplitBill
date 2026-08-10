@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from Backend_SplitBill.model import User
+from backend_splitbill.model import User
 from sqlalchemy import select, or_
 
 async def get_registered_and_guest_invitees_of_group(group, db):

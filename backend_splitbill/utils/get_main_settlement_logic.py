@@ -1,6 +1,6 @@
 from decimal import Decimal
-from Backend_SplitBill.utils.get_settlement_groups import get_settlement_groups
-from Backend_SplitBill.utils.get_creditors_debtors import get_creditors_debtors
+from backend_splitbill.utils.get_settlement_groups import get_settlement_groups
+from backend_splitbill.utils.get_creditors_debtors import get_creditors_debtors
 
 
 async def get_main_settlement_logic(expense_groups, db, you, other):

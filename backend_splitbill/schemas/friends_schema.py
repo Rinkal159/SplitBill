@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, EmailStr, model_validator, ConfigDict
 from typing import Annotated
 from enum import Enum
-from Backend_SplitBill.model import InvitationStatus
+from backend_splitbill.model import InvitationStatus
 from decimal import Decimal
 
 

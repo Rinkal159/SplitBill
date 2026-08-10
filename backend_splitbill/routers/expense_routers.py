@@ -10,25 +10,25 @@ from fastapi import (
 )
 from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from Backend_SplitBill.database import get_db
-from Backend_SplitBill.auth.authentication import get_current_user
+from backend_splitbill.database import get_db
+from backend_splitbill.auth.authentication import get_current_user
 from decimal import Decimal
-from Backend_SplitBill.utils.get_creditors_debtors import get_creditors_debtors
-from Backend_SplitBill.utils.get_expense_groups import get_expense_groups
-from Backend_SplitBill.utils.validate_fields import validate_fields
-from Backend_SplitBill.utils.create_splits_of_expense import create_expense_splits
-from Backend_SplitBill.utils.get_settlement_groups import get_settlement_groups
-from Backend_SplitBill.utils.get_all_expenses_in_which_user_involved import (
+from backend_splitbill.utils.get_creditors_debtors import get_creditors_debtors
+from backend_splitbill.utils.get_expense_groups import get_expense_groups
+from backend_splitbill.utils.validate_fields import validate_fields
+from backend_splitbill.utils.create_splits_of_expense import create_expense_splits
+from backend_splitbill.utils.get_settlement_groups import get_settlement_groups
+from backend_splitbill.utils.get_all_expenses_in_which_user_involved import (
     get_all_expenses_in_which_user_involved,
 )
-from Backend_SplitBill.utils.friendship_checks import friendship_checks
-from Backend_SplitBill.services.cloudinary import (
+from backend_splitbill.utils.friendship_checks import friendship_checks
+from backend_splitbill.services.cloudinary import (
     upload_picture_on_cloudinary,
     delete_picture_from_cloudinary,
 )
 from typing import Annotated
 
-from Backend_SplitBill.schemas.expense_schema import (
+from backend_splitbill.schemas.expense_schema import (
     ExpenseCreate as ExpenseCreateSchema,
     ExpenseCreateResponse as ExpenseCreateResponseSchema,
     ExpenseSchema as SingleExpenseResponseSchema,
@@ -37,7 +37,7 @@ from Backend_SplitBill.schemas.expense_schema import (
     FriendsSettlementsResponse as FriendsSettlementsResponseSchema,
     UserDetail as UserDetailSchema,
 )
-from Backend_SplitBill.model import (
+from backend_splitbill.model import (
     Expense,
     ExpenseSplits,
     ExpenseHistory,

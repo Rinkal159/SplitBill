@@ -1,16 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from Backend_SplitBill.database import get_db
-from Backend_SplitBill.auth.authentication import get_current_user
-from Backend_SplitBill.utils.get_friend_settlement_data import get_friend_settlement_data
+from backend_splitbill.database import get_db
+from backend_splitbill.auth.authentication import get_current_user
+from backend_splitbill.utils.get_friend_settlement_data import get_friend_settlement_data
 from sqlalchemy import select
-from Backend_SplitBill.utils.get_expense_groups import get_expense_groups
-from Backend_SplitBill.utils.get_settlement_creditors_debtors import get_settlement_creditors_debtors
-from Backend_SplitBill.utils.get_member_settlement_data import get_member_settlement_data
+from backend_splitbill.utils.get_expense_groups import get_expense_groups
+from backend_splitbill.utils.get_settlement_creditors_debtors import get_settlement_creditors_debtors
+from backend_splitbill.utils.get_member_settlement_data import get_member_settlement_data
 from decimal import Decimal
 
-from Backend_SplitBill.model import Expense, ExpenseSplits, Settlement, SettlementSplits
-from Backend_SplitBill.schemas.settlement_schema import (
+from backend_splitbill.model import Expense, ExpenseSplits, Settlement, SettlementSplits
+from backend_splitbill.schemas.settlement_schema import (
     ExpenseWiseSettlementCreate as ExpenseWiseSettlementCreateSchema,
     OverallSettlementCreate as OverallSettlementCreateSchema,
     OverallSettlementGroupwiseCreate as OverallSettlementGroupwiseCreateSchema,
