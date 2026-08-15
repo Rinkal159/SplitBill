@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Cookie
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Cookie, Request
 from backend_splitbill.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_, update, delete
@@ -8,7 +8,7 @@ from backend_splitbill.auth.authentication import create_token
 from fastapi.responses import JSONResponse
 from backend_splitbill.auth.authentication import get_current_user
 from datetime import datetime, UTC
-from backend_splitbill.auth.authentication import verify_token
+from backend_splitbill.utils.verify_reset_token import verify_reset_token
 from backend_splitbill.utils.forgot_password import forgot_password
 
 from backend_splitbill.schemas.user_schema import (
@@ -44,24 +44,24 @@ async def signup_api(
     try:
         user.email = user.email.lower()
 
+        # if user with same "email id" already exists
         result = await db.execute(
             select(User).where(func.lower(User.email) == user.email)
         )
         existed_user = result.scalars().one_or_none()
 
-        # if user with same "email id" already exists
         if existed_user:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="User with same email already exists",
             )
 
+        # if user with same "mobile number" already exists
         result = await db.execute(
             select(User).where(User.mobile_number == user.mobile_number)
         )
         existed_user = result.scalars().one_or_none()
 
-        # if user with same "mobile number" already exists
         if existed_user:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -82,7 +82,6 @@ async def signup_api(
         # hash password
         user_dict["password"] = hash(user.password)
         
-
         new_user = User(**user_dict)
         db.add(new_user)
 
@@ -219,9 +218,7 @@ async def verify_otp_api(
     existed_user = result.scalars().one_or_none()
 
     if not existed_user:
-        return {
-            "message": "If the provided email and OTP are valid, the verification will be processed."
-        }
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or OTP")
 
     # get otp from the database where "used = False"
     result = await db.execute(
@@ -247,7 +244,7 @@ async def verify_otp_api(
 
     # otp not matched
     if not verify(verify_otp.otp, existed_otp.otp):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Invalid OTP")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or OTP")
 
     # change it to True, as OTP is used
     existed_otp.used = True
@@ -269,34 +266,35 @@ async def verify_otp_api(
         samesite="lax",
         secure=False,
         max_age=60 * 15,
+        path="/"
     )
 
     return response
 
+
+#* for react, whether user has reset-token or not to determine whether reset-password page should render or not
+@auth_router.get("/verify-reset-token")
+def verify_reset_token_cookie(
+    reset_token: str | None = Cookie(None)
+):
+    if not reset_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Reset token not found"
+        )
+
+    return {"message": "Reset token exists"}  
+     
 
 # * reset password
 @auth_router.post("/reset-password")
 async def reset_password_api(
     reset_password: ResetPasswordSchema,
     db: AsyncSession = Depends(get_db),
-    reset_token: str | None = Cookie(None),
+    reset_token: str | None = Cookie(None)
 ):
-    # if not got the reset_token then OTP was not verified at first place
-    if not reset_token:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Please verify through OTP before reseting password",
-        )
-
-    # get the payload
-    payload = verify_token(reset_token)
-
-    # if not the reset_token payload then it is invalid
-    if payload.get("purpose") != "password_reset":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid reset token"
-        )
-
+    payload = verify_reset_token(reset_token=reset_token)
+    
     # get user from payload's user_id
     result = await db.execute(select(User).where(User.id == payload.get("user_id")))
     existed_user = result.scalars().one_or_none()
@@ -316,7 +314,7 @@ async def reset_password_api(
     response = JSONResponse(content={"message": "Password reset successfully!"})
 
     # delete reset cookie as it is no londer needed
-    response.delete_cookie("reset_token")
+    response.delete_cookie("reset_token", path="/")
 
     return response
 
@@ -336,7 +334,7 @@ def logout_api(current_user=Depends(get_current_user)):
     response = JSONResponse({"message": message})
 
     # deleting cookie
-    response.delete_cookie(key="token", httponly=True, secure=False, samesite="lax")
+    response.delete_cookie(key="token", httponly=True, secure=False, samesite="lax", path="/")
 
     return response
 
