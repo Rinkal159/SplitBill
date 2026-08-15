@@ -63,7 +63,6 @@ class VerifyOTP(Base):
     
 #* ResetPassword
 class ResetPassword(Base):
-    email: EmailStr
     new_password: Annotated[str, Field(
         min_length=8
     )]
