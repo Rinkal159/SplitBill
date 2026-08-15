@@ -1,3 +1,26 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+@layer components {
+    .previewImgae {
+        @apply w-[200px] h-[200px] rounded-full border-2 object-cover
+    }
+
+    .form-input {
+        @apply w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200
+    }
+
+    .form-lbl {
+        @apply text-xs font-medium text-slate-600 uppercase tracking-wider
+    }
+
+    .btn {
+        @apply w-full py-3 mt-2 bg-gradient-to-r from-sky-600 via-sky-500 to-blue-600 text-white font-medium rounded-xl shadow-md shadow-sky-200/50 hover:shadow-lg hover:shadow-sky-300/40 hover:scale-[1.01] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-md disabled:hover:shadow-sky-200/50
+    }
+}
+
+.form-lbl:has(+ .form-input:focus) {
+    @apply text-slate-900;
+}
