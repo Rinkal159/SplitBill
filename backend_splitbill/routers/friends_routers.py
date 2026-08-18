@@ -8,11 +8,12 @@ from backend_splitbill.utils.friendship_checks import friendship_checks
 
 from backend_splitbill.schemas.friends_schema import (
     InvitationCreate as InvitationCreateSchema,
-    InvitationsResponse as InvitationsResponseSchema,
+    InvitationReceivedResponse as InvitationReceivedResponseSchema,
+    InvitationSentResponse as InvitationSentResponseSchema,
     InvitationUpdateStatus as InvitationUpdateStatusSchema,
     InvitationUpdate as InvitationUpdateSchema,
     UserDetail as UserDetailSchema,
-    FriendProfileResponse as FriendProfileResponseSchema
+    FriendProfileResponse as FriendProfileResponseSchema,
 )
 from backend_splitbill.model import (
     User,
@@ -73,7 +74,7 @@ async def invite_friend_api(
         if already_friends:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Friendship already exists between you and {existed_invitee.name}",
+                detail=f"You and {existed_invitee.name} are already friends!",
             )
 
         # already sent or received invitation
@@ -157,13 +158,33 @@ async def invite_friend_api(
 
 
 # * get all the invitations you got
-@friends_router.get("/invitations", response_model=list[InvitationsResponseSchema])
+@friends_router.get(
+    "/invitations/received", response_model=list[InvitationReceivedResponseSchema]
+)
 async def get_invitations_api(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
     result = await db.execute(
         select(Invitation).where(
             Invitation.invitee_id == current_user.id,
+            Invitation.status == InvitationStatus.PENDING,
+        )
+    )
+    existed_invitations = result.scalars().all()
+
+    return existed_invitations
+
+
+# * get all sent invitations
+@friends_router.get(
+    "/invitations/sent", response_model=list[InvitationSentResponseSchema]
+)
+async def get_sent_friends_invitations_api(
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
+):
+    result = await db.execute(
+        select(Invitation).where(
+            Invitation.inviter_id == current_user.id,
             Invitation.status == InvitationStatus.PENDING,
         )
     )
@@ -312,7 +333,9 @@ async def remove_friend_api(
 ):
     try:
         # friend settlement data - you need total balance
-        response = await friendship_checks(db=db, current_user=current_user, friend_id=friend_id)
+        response = await friendship_checks(
+            db=db, current_user=current_user, friend_id=friend_id
+        )
         friend_settlement_data = response["friend_settlement_data"]
         existed_friendship = response["existed_friendship"]
 
@@ -347,24 +370,31 @@ async def get_friend(
     current_user=Depends(get_current_user),
 ):
     # friend settlement data - you need friend and total balance
-    response = await friendship_checks(db=db, current_user=current_user, friend_id=friend_id)
+    response = await friendship_checks(
+        db=db, current_user=current_user, friend_id=friend_id
+    )
     friend_settlement_data = response["friend_settlement_data"]
-    
+
     # groups in which you're included
-    groups_you_are_included = select(GroupMember.group_id).join(Group).where(GroupMember.user_id == current_user.id, Group.is_deleted.is_(False))
+    groups_you_are_included = (
+        select(GroupMember.group_id)
+        .join(Group)
+        .where(GroupMember.user_id == current_user.id, Group.is_deleted.is_(False))
+    )
 
     # groups in which you and your friend both are included
     result = await db.execute(
         select(Group)
         .join(GroupMember)
         .where(
-            GroupMember.user_id == friend_id, GroupMember.group_id.in_(groups_you_are_included)
+            GroupMember.user_id == friend_id,
+            GroupMember.group_id.in_(groups_you_are_included),
         )
     )
     groups_you_and_friend_included = result.scalars().all()
 
     return {
-        "friend" : friend_settlement_data["friend"],
-        "total_balance" : friend_settlement_data["total_balance"],
-        "common_groups" : groups_you_and_friend_included
+        "friend": friend_settlement_data["friend"],
+        "total_balance": friend_settlement_data["total_balance"],
+        "common_groups": groups_you_and_friend_included,
     }
