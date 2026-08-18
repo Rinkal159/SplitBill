@@ -173,6 +173,106 @@ async def upload_receipt_api(
     return existed_expense
 
 
+# * get all your borrowings and lendings - Dashboard
+@expense_router.get("/me", response_model=BorrowingsAndLendingsSchema)
+async def get_all_borrowing_and_lendings_api(
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
+):
+    # get all expenses in which you're involved
+    result = await db.execute(
+        select(ExpenseSplits.expense_id)
+        .where(ExpenseSplits.user_id == current_user.id)
+        .order_by(ExpenseSplits.expense_id)
+    )
+    expense_ids = result.scalars().all()
+
+    expense_groups = await get_expense_groups(
+        expense_ids=expense_ids, db=db, newest_first=True
+    )
+
+    general_balance = {}
+
+    for splits in expense_groups:
+        settlement_groups = await get_settlement_groups(splits, db)
+
+        creditors = []
+        debtors = []
+        get_creditors_debtors(splits, creditors, debtors, settlement_groups)
+
+        i = 0  # creditor
+        j = 0  # debtor
+
+        while i < len(creditors) and j < len(debtors):
+            creditor = creditors[i]
+            debtor = debtors[j]
+
+            creditor_balance = creditor["balance"]
+            debtor_balance = abs(debtor["balance"])
+
+            transfer = min(creditor_balance, debtor_balance)
+
+            # if you're creditor then you "lent" to other participants (Paisa diya)
+            if creditor["user"].id == current_user.id:
+                debtor_id = debtor["user"]
+                existed_debtor = general_balance.get(debtor_id.id)
+
+                general_balance[debtor_id.id] = {
+                    "user": UserDetailSchema.model_validate(debtor["user"]),
+                    "amount": (
+                        existed_debtor["amount"] + transfer
+                        if existed_debtor
+                        else transfer
+                    ),
+                }
+
+            # if you're debtor then you "borrowed" from other participants (Paisa liya)
+            elif debtor["user"].id == current_user.id:
+                creditor_id = creditor["user"]
+                existed_creditor = general_balance.get(creditor_id.id)
+                general_balance[creditor_id.id] = {
+                    "user": UserDetailSchema.model_validate(creditor["user"]),
+                    "amount": (
+                        existed_creditor["amount"] - transfer
+                        if existed_creditor
+                        else -transfer
+                    ),
+                }
+
+            creditor["balance"] -= transfer
+            debtor["balance"] += transfer
+
+            if creditor["balance"] <= Decimal("0"):
+                i += 1
+
+            if abs(debtor["balance"]) <= Decimal("0"):
+                j += 1
+
+    borrowings = []
+    lendings = []
+    total_borrowings = Decimal("0")
+    total_lendings = Decimal("0")
+
+    for curr in general_balance.values():
+        if curr.get("amount") == 0:
+            continue
+
+        if curr.get("amount") < 0:
+            total_borrowings += abs(curr.get("amount"))
+            borrowings.append(
+                {"borrowed_from": curr.get("user"), "amount": abs(curr.get("amount"))}
+            )
+        else:
+            total_lendings += curr.get("amount")
+            lendings.append({"lent_to": curr.get("user"), "amount": curr.get("amount")})
+
+    return {
+        "total_borrowings": total_borrowings,
+        "total_lendings": total_lendings,
+        "borrowings": borrowings,
+        "lendings": lendings,
+    }
+
+
 # * get single expense
 @expense_router.get("/{expense_id}", response_model=SingleExpenseResponseSchema)
 async def get_single_expense(
@@ -319,106 +419,6 @@ async def get_all_group_expenses_api(
         "skip": skip,
         "limit": limit,
         "has_more": skip + len(expenses) < total_count,
-    }
-
-
-# * get all your borrowings and lendings - Dashboard
-@expense_router.get("/me", response_model=BorrowingsAndLendingsSchema)
-async def get_all_borrowing_and_lendings_api(
-    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
-):
-    # get all expenses in which you're involved
-    result = await db.execute(
-        select(ExpenseSplits.expense_id)
-        .where(ExpenseSplits.user_id == current_user.id)
-        .order_by(ExpenseSplits.expense_id)
-    )
-    expense_ids = result.scalars().all()
-
-    expense_groups = await get_expense_groups(
-        expense_ids=expense_ids, db=db, newest_first=True
-    )
-
-    general_balance = {}
-
-    for splits in expense_groups:
-        settlement_groups = await get_settlement_groups(splits, db)
-
-        creditors = []
-        debtors = []
-        get_creditors_debtors(splits, creditors, debtors, settlement_groups)
-
-        i = 0  # creditor
-        j = 0  # debtor
-
-        while i < len(creditors) and j < len(debtors):
-            creditor = creditors[i]
-            debtor = debtors[j]
-
-            creditor_balance = creditor["balance"]
-            debtor_balance = abs(debtor["balance"])
-
-            transfer = min(creditor_balance, debtor_balance)
-
-            # if you're creditor then you "lent" to other participants (Paisa diya)
-            if creditor["user"].id == current_user.id:
-                debtor_id = debtor["user"]
-                existed_debtor = general_balance.get(debtor_id.id)
-
-                general_balance[debtor_id.id] = {
-                    "user": UserDetailSchema.model_validate(debtor["user"]),
-                    "amount": (
-                        existed_debtor["amount"] + transfer
-                        if existed_debtor
-                        else transfer
-                    ),
-                }
-
-            # if you're debtor then you "borrowed" from other participants (Paisa liya)
-            elif debtor["user"].id == current_user.id:
-                creditor_id = creditor["user"]
-                existed_creditor = general_balance.get(creditor_id.id)
-                general_balance[creditor_id.id] = {
-                    "user": UserDetailSchema.model_validate(creditor["user"]),
-                    "amount": (
-                        existed_creditor["amount"] - transfer
-                        if existed_creditor
-                        else -transfer
-                    ),
-                }
-
-            creditor["balance"] -= transfer
-            debtor["balance"] += transfer
-
-            if creditor["balance"] <= Decimal("0"):
-                i += 1
-
-            if abs(debtor["balance"]) <= Decimal("0"):
-                j += 1
-
-    borrowings = []
-    lendings = []
-    total_borrowings = Decimal("0")
-    total_lendings = Decimal("0")
-
-    for curr in general_balance.values():
-        if curr.get("amount") == 0:
-            continue
-
-        if curr.get("amount") < 0:
-            total_borrowings += abs(curr.get("amount"))
-            borrowings.append(
-                {"borrowed_from": curr.get("user"), "amount": abs(curr.get("amount"))}
-            )
-        else:
-            total_lendings += curr.get("amount")
-            lendings.append({"lent_to": curr.get("user"), "amount": curr.get("amount")})
-
-    return {
-        "total_borrowings": total_borrowings,
-        "total_lendings": total_lendings,
-        "borrowings": borrowings,
-        "lendings": lendings,
     }
 
 
