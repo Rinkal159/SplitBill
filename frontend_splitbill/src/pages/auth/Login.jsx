@@ -1,4 +1,4 @@
-import React, { use, useState } from "react";
+import React, { use, useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Error from "../error/Error";
 import { Link } from "react-router-dom";
@@ -6,11 +6,12 @@ import Navbar from "../../layout/Navbar";
 import api from "../../api/axios";
 import LabelAndInput from "./LabelAndInput";
 import RedirectLinks from "./RedirectLinks";
+import { AuthContext } from "../../context/AuthProvider";
 
 function Login() {
   const [person, setPerson] = new useState({
-    email: "",
-    password: "",
+    email: "rinkalsingapuri@gmail.com",
+    password: "Rinkal@123",
   });
 
   const [pageErrors, setPageErrors] = new useState({});
@@ -18,6 +19,8 @@ function Login() {
   const [loading, setLoading] = new useState(false);
 
   const navigate = useNavigate();
+
+  const { setUser } = useContext(AuthContext);
 
   const handleChange = (e, field) => {
     setPerson((prevPerson) => ({
@@ -32,6 +35,11 @@ function Login() {
 
     try {
       const response = await api.post("/auth/login", person);
+
+      // upading user in AuthContext, because AuthContext runs once only when app mounts and at that time user was not logged in.
+      const user = await api.get("/auth/me");
+      setUser(user.data);
+
       return navigate("/dashboard");
     } catch (error) {
       setLoading(false);
@@ -55,7 +63,7 @@ function Login() {
               <h2 className="text-2xl font-normal text-slate-800 tracking-tight">
                 Log into your
                 {/* <br /> */}
-                <span className="font-medium bg-gradient-to-r from-sky-500 via-sky-400 to-blue-600 bg-clip-text text-transparent drop-shadow-sm p-2">
+                <span className="heading-shadow p-2">
                   SplitBill account
                 </span>
               </h2>
