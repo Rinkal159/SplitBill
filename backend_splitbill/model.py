@@ -76,7 +76,7 @@ class User(Base):
         if self.profile_picture:
             url, _ = cloudinary_url(self.profile_picture)
             return url
-        return "/static/pictures/default.png"
+        return "/default.png"
        
        
     # otps sent to reset the password
@@ -293,6 +293,8 @@ class Invitation(Base):
     inviter: Mapped["User"] = relationship(
         "User", foreign_keys=[inviter_id], back_populates="invitations", lazy="selectin"
     )
+    
+    invitee: Mapped["User"] = relationship("User", foreign_keys=[invitee_id], lazy="selectin")
 
 
 class Expense(Base):
