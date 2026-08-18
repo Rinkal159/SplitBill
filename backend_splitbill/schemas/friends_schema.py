@@ -3,6 +3,7 @@ from typing import Annotated
 from enum import Enum
 from backend_splitbill.model import InvitationStatus
 from decimal import Decimal
+from datetime import datetime
 
 
 class Base(BaseModel):
@@ -47,7 +48,18 @@ class UserDetail(Base):
 class InvitationsResponse(Base):
     id: int
     status: InvitationStatus
+    created_at: datetime
+    
+    
+class InvitationReceivedResponse(InvitationsResponse):
     inviter: UserDetail
+    
+    
+class InvitationSentResponse(InvitationsResponse):
+    invitee: UserDetail | None
+    invitee_email: EmailStr | None
+    invitee_mobile_number: str | None
+    
 
 
 #* FriendProfileResponse
