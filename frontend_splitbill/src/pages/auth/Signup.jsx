@@ -163,7 +163,7 @@ export default function Signup() {
               <h2 className="text-2xl font-normal text-slate-800 tracking-tight">
                 Create your
                 {/* <br /> */}
-                <span className="font-medium bg-gradient-to-r from-sky-500 via-sky-400 to-blue-600 bg-clip-text text-transparent drop-shadow-sm p-2">
+                <span className="heading-shadow p-2">
                   SplitBill account
                 </span>
               </h2>
