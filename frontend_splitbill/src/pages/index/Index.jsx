@@ -2,8 +2,12 @@ import CircularProfile from "./CircularProfile";
 import Expense from "./Expense";
 import Navbar from "../../layout/Navbar";
 import { Link } from "react-router-dom";
+import { useContext } from "react";
+import { AuthContext } from "../../context/AuthProvider";
 
 export default function Index() {
+  const { user } = useContext(AuthContext);
+  
   return (
     <div className="bg-blue-100">
       <div className="bg-[radial-gradient(ellipse_at_top_left,#f2fbff_0%,#f7fdff,#f2fbff_100%)]">
@@ -24,9 +28,7 @@ export default function Index() {
                 <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-medium tracking-tight leading-[1.1] md:leading-[1.15] text-slate-800">
                   Split bills.
                   <br />
-                  <span className="bg-gradient-to-r from-sky-500 via-sky-400 to-blue-600 bg-clip-text text-transparent drop-shadow-sm">
-                    Settle easily.
-                  </span>
+                  <span className="heading-shadow">Settle easily.</span>
                 </h1>
 
                 <p className="text-md sm:text-xl md:text-xl text-slate-500/90 lg:mt-8 mt-6  max-w-xl leading-relaxed font-medium">
@@ -36,10 +38,10 @@ export default function Index() {
 
                 <div className="lg:mt-10 mt-6 flex flex-wrap gap-5 items-center">
                   <Link
-                    to={"/signup"}
+                    to={user ? "/dashboard" : "/signup"}
                     className="bg-gradient-to-r from-sky-500 to-blue-500 text-white font-semibold px-8 py-4 rounded-2xl text-lg inline-block shadow-[0_20px_35px_-12px_rgba(56,189,248,0.4)] hover:shadow-[0_25px_40px_-12px_rgba(56,189,248,0.6)] hover:-translate-y-1 transition-all duration-300"
                   >
-                    Get Started
+                    {user ? "Go to Dashboard" : "Get started"}
                   </Link>
                 </div>
               </div>
