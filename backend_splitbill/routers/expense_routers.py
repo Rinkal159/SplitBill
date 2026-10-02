@@ -8,7 +8,7 @@ from fastapi import (
     File,
     Query,
 )
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend_splitbill.database import get_db
 from backend_splitbill.auth.authentication import get_current_user
@@ -26,7 +26,10 @@ from backend_splitbill.services.cloudinary import (
     upload_picture_on_cloudinary,
     delete_picture_from_cloudinary,
 )
+from backend_splitbill.utils.get_friend_balances import get_friend_balances
 from typing import Annotated
+from backend_splitbill.utils.is_your_friend import is_your_friend
+from backend_splitbill.utils.get_expenses_with_friend import get_expenses_with_friend
 
 from backend_splitbill.schemas.expense_schema import (
     ExpenseCreate as ExpenseCreateSchema,
@@ -36,8 +39,11 @@ from backend_splitbill.schemas.expense_schema import (
     BorrowingsAndLendings as BorrowingsAndLendingsSchema,
     FriendsSettlementsResponse as FriendsSettlementsResponseSchema,
     UserDetail as UserDetailSchema,
+    TotalBalanceWithFriend as TotalBalanceWithFriendSchema
 )
 from backend_splitbill.model import (
+    Friends,
+    User,
     Expense,
     ExpenseSplits,
     ExpenseHistory,
@@ -339,12 +345,20 @@ async def get_all_expenses_api(
     )
     expense_ids = result.scalars().all()
 
-    expenses = await get_all_expenses_in_which_user_involved(
-        expense_ids=expense_ids, db=db, current_user=current_user
+    # result = await db.execute(select(ExpenseSplits.expense_id).where(ExpenseSplits.user_id == current_user.id))
+    # all_expense_ids = result.scalars().all()
+
+    # friend_balances =  await get_friend_balances(expense_ids=all_expense_ids, db=db, current_user=current_user)
+
+    expenses, friend_balances, total_balance = (
+        await get_all_expenses_in_which_user_involved(
+            expense_ids=expense_ids, db=db, current_user=current_user
+        )
     )
 
     return {
         "expenses": expenses,
+        "friend_balances": friend_balances,
         "page": page,
         "skip": skip,
         "limit": limit,
@@ -436,6 +450,165 @@ async def get_friends_settlements_api(
         db=db, current_user=current_user, friend_id=friend_id
     )
     return response["friend_settlement_data"]
+
+
+# * get total balance with that friend
+@expense_router.get(
+    "/friends/balance/{friend_id}", response_model=TotalBalanceWithFriendSchema
+)
+async def getTotalBalanceWithFriend(
+    friend_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+
+    friend = await is_your_friend(db, current_user, friend_id)
+
+    expense_ids = await get_expenses_with_friend(db, current_user, friend_id)
+
+    expense_groups = await get_expense_groups(
+        expense_ids=expense_ids["expenses_ids_with_your_friend"],
+        db=db,
+        newest_first=True,
+    )
+
+    total_balance = Decimal("0")
+    had_expenses= False
+
+    for splits in expense_groups:
+        settlement_groups = await get_settlement_groups(splits, db)
+
+        creditors = []
+        debtors = []
+        get_creditors_debtors(splits, creditors, debtors, settlement_groups)
+
+        i = 0
+        j = 0
+
+        while i < len(creditors) and j < len(debtors):
+            creditor = creditors[i]
+            debtor = debtors[j]
+
+            creditor_balance = creditor["balance"]
+            debtor_balance = abs(debtor["balance"])
+
+            transfer = min(creditor_balance, debtor_balance)
+
+            if (
+                creditor["user"].id == current_user.id
+                and debtor["user"].id == friend_id
+            ):
+                total_balance += transfer
+                had_expenses = True
+            elif (
+                debtor["user"].id == current_user.id
+                and creditor["user"].id == friend_id
+            ):
+                total_balance -= transfer
+                had_expenses = True
+
+            creditor["balance"] -= transfer
+            debtor["balance"] += transfer
+
+            if creditor["balance"] <= Decimal("0"):
+                i += 1
+            if abs(debtor["balance"]) <= Decimal("0"):
+                j += 1
+
+    return {"friend": friend, "total_balance": total_balance, "had_expenses" : had_expenses}
+
+
+#* get total balance with all friends
+@expense_router.get(
+    "/friends/balances/all", response_model=list[TotalBalanceWithFriendSchema]
+)
+async def getTotalBalanceWithAllFriends(
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    result = await db.execute(
+        select(ExpenseSplits.expense_id).where(ExpenseSplits.user_id == current_user.id)
+    )
+    expense_ids = result.scalars().all()
+
+    your_friends = {friend.friend_id for friend in current_user.sent_friendships} | {
+        friend.user_id for friend in current_user.received_friendships
+    }
+
+    if not your_friends:
+        return []
+
+    # Fetch friend records for the IDs collected above.
+    friend_result = await db.execute(select(User).where(User.id.in_(your_friends)))
+    friends_by_id = {friend.id: friend for friend in friend_result.scalars().all()}
+
+    expense_groups = await get_expense_groups(
+        expense_ids=expense_ids,
+        db=db,
+        newest_first=True,
+    )
+
+    balances = {
+        friend_id: {
+            "friend": friends_by_id[friend_id],
+            "total_balance": Decimal("0"),
+            "had_expenses": False
+        }
+        for friend_id in your_friends
+        if friend_id in friends_by_id
+    }
+    
+    
+    for splits in expense_groups:
+        settlement_groups = await get_settlement_groups(splits, db)
+
+        creditors = []
+        debtors = []
+        get_creditors_debtors(
+            splits=splits,
+            settlement_groups=settlement_groups,
+            creditors=creditors,
+            debtors=debtors,
+        )
+
+        i = 0
+        j = 0
+
+        while i < len(creditors) and j < len(debtors):
+            creditor = creditors[i]
+            debtor = debtors[j]
+
+            creditor_balance = creditor["balance"]
+            debtor_balance = abs(debtor["balance"])
+            transfer = min(creditor_balance, debtor_balance)
+
+            # Current user lent to a friend.
+            if (
+                creditor["user"].id == current_user.id
+                and debtor["user"].id in your_friends
+            ):
+                friend_id = debtor["user"].id
+                balances[friend_id]["total_balance"] += transfer
+                balances[friend_id]["had_expenses"] = True
+
+            # Current user borrowed from a friend.
+            elif (
+                debtor["user"].id == current_user.id
+                and creditor["user"].id in your_friends
+            ):
+                friend_id = creditor["user"].id
+                balances[friend_id]["total_balance"] -= transfer
+                balances[friend_id]["had_expenses"] = True
+
+            creditor["balance"] -= transfer
+            debtor["balance"] += transfer
+
+            if creditor["balance"] <= Decimal("0"):
+                i += 1
+            if abs(debtor["balance"]) <= Decimal("0"):
+                j += 1
+
+    return list(balances.values())
 
 
 # * delete an expense
