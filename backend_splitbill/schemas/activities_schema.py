@@ -7,17 +7,17 @@ class Base(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-#* PaginatedActivitiesResponse
+# * PaginatedActivitiesResponse
 class UserDetail(Base):
     id: int
     name: str
-    profile_picture: str
+    profile_picture_path: str
 
 
 class GroupDetail(Base):
     name: str
-    
-    
+
+
 class ActivitiesResponse(Base):
     type: str
     group_name: GroupDetail | None
@@ -28,6 +28,7 @@ class ActivitiesResponse(Base):
     performed_by_me: bool
     performed_at: datetime
     amount_settled: Decimal | None
+    summary: str
 
 
 class PaginatedActivitiesResponse(Base):
