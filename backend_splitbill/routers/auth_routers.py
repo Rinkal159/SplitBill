@@ -1,4 +1,13 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Cookie, Request
+from fastapi import (
+    APIRouter,
+    Depends,
+    UploadFile,
+    File,
+    HTTPException,
+    status,
+    Cookie,
+    Request,
+)
 from backend_splitbill.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_, update, delete
@@ -69,19 +78,21 @@ async def signup_api(
             )
 
         user_dict = user.model_dump()
-        
+
         # make email lower
         user_dict["email"] = user_dict["email"].lower()
 
         # store the profile picture in cloudinary and get the public id
         if profilePicture:
             if profilePicture.filename:
-                profile_picture_public_id = upload_picture_on_cloudinary(file=profilePicture, folder="profile_pictures")
+                profile_picture_public_id = upload_picture_on_cloudinary(
+                    file=profilePicture, folder="profile_pictures"
+                )
                 user_dict["profile_picture"] = profile_picture_public_id
 
         # hash password
         user_dict["password"] = hash(user.password)
-        
+
         new_user = User(**user_dict)
         db.add(new_user)
 
@@ -218,7 +229,9 @@ async def verify_otp_api(
     existed_user = result.scalars().one_or_none()
 
     if not existed_user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or OTP")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or OTP"
+        )
 
     # get otp from the database where "used = False"
     result = await db.execute(
@@ -244,7 +257,9 @@ async def verify_otp_api(
 
     # otp not matched
     if not verify(verify_otp.otp, existed_otp.otp):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or OTP")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or OTP"
+        )
 
     # change it to True, as OTP is used
     existed_otp.used = True
@@ -266,35 +281,32 @@ async def verify_otp_api(
         samesite="lax",
         secure=False,
         max_age=60 * 15,
-        path="/"
+        path="/",
     )
 
     return response
 
 
-#* for react, whether user has reset-token or not to determine whether reset-password page should render or not
+# * for react, whether user has reset-token or not to determine whether reset-password page should render or not
 @auth_router.get("/verify-reset-token")
-def verify_reset_token_cookie(
-    reset_token: str | None = Cookie(None)
-):
+def verify_reset_token_cookie(reset_token: str | None = Cookie(None)):
     if not reset_token:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Reset token not found"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Reset token not found"
         )
 
-    return {"message": "Reset token exists"}  
-     
+    return {"message": "Reset token exists"}
+
 
 # * reset password
 @auth_router.post("/reset-password")
 async def reset_password_api(
     reset_password: ResetPasswordSchema,
     db: AsyncSession = Depends(get_db),
-    reset_token: str | None = Cookie(None)
+    reset_token: str | None = Cookie(None),
 ):
     payload = verify_reset_token(reset_token=reset_token)
-    
+
     # get user from payload's user_id
     result = await db.execute(select(User).where(User.id == payload.get("user_id")))
     existed_user = result.scalars().one_or_none()
@@ -334,7 +346,9 @@ def logout_api(current_user=Depends(get_current_user)):
     response = JSONResponse({"message": message})
 
     # deleting cookie
-    response.delete_cookie(key="token", httponly=True, secure=False, samesite="lax", path="/")
+    response.delete_cookie(
+        key="token", httponly=True, secure=False, samesite="lax", path="/"
+    )
 
     return response
 

@@ -1,11 +1,15 @@
 from fastapi import HTTPException, status
-from backend_splitbill.utils.validate_participants_are_group_members import are_group_members
+from backend_splitbill.utils.validate_participants_are_group_members import (
+    are_group_members,
+)
 
 
-async def validate_participants(group_id, db, participants_id_raw, participant_ids_set, current_user):
+async def validate_participants(
+    group_id, db, participants_id_raw, participant_ids_set, current_user
+):
     if group_id is not None:
         await are_group_members(db, group_id, participants_id_raw)
-        
+
     # if current user is not included in participants
     if current_user.id not in participant_ids_set:
         raise HTTPException(
@@ -19,7 +23,6 @@ async def validate_participants(group_id, db, participants_id_raw, participant_i
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Duplicate IDs are not allowed",
         )
-
 
     if group_id is None:
         # get all the friend ids

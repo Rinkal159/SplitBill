@@ -8,16 +8,12 @@ class Base(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-#* SettlementCreate
+# * SettlementCreate
 class SettlementBase(Base):
     to_user: int
     amount: Annotated[Decimal, Field(gt=0)]
-    payment_method: Annotated[str | None, Field(
-        max_length=30
-    )] = None
-    note: Annotated[str | None, Field(
-        max_length=1500
-    )] = None
+    payment_method: Annotated[str | None, Field(max_length=30)] = None
+    note: Annotated[str | None, Field(max_length=1500)] = None
     settlement_date: date
 
 
@@ -33,7 +29,7 @@ class OverallSettlementGroupwiseCreate(SettlementBase):
     group_id: int
 
 
-#* SettlementResponse
+# * SettlementResponse
 class ExpenseDetail(Base):
     id: int
     title: str

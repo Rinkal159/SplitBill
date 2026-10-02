@@ -7,7 +7,7 @@ class Base(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-#* ExpenseHistory
+# * ExpenseHistory
 class ExpenseDetail(Base):
     title: str
     description: str | None = None
@@ -35,9 +35,9 @@ class SettlementHistoryResponse(Base):
     amount_settled: Decimal
     settlement_date: date
     expense: ExpenseDetail | None
-    
-    
-#* FriendsHistory
+
+
+# * FriendsHistory
 class FriendsHistory(Base):
     action: str
     user: UserDetail | str

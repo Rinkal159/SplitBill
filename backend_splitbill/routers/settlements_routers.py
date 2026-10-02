@@ -2,11 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend_splitbill.database import get_db
 from backend_splitbill.auth.authentication import get_current_user
-from backend_splitbill.utils.get_friend_settlement_data import get_friend_settlement_data
+from backend_splitbill.utils.get_friend_settlement_data import (
+    get_friend_settlement_data,
+)
 from sqlalchemy import select
 from backend_splitbill.utils.get_expense_groups import get_expense_groups
-from backend_splitbill.utils.get_settlement_creditors_debtors import get_settlement_creditors_debtors
-from backend_splitbill.utils.get_member_settlement_data import get_member_settlement_data
+from backend_splitbill.utils.get_settlement_creditors_debtors import (
+    get_settlement_creditors_debtors,
+)
+from backend_splitbill.utils.get_member_settlement_data import (
+    get_member_settlement_data,
+)
 from decimal import Decimal
 
 from backend_splitbill.model import Expense, ExpenseSplits, Settlement, SettlementSplits
@@ -195,7 +201,6 @@ async def settle_up_friend_overall_api(
         db.add(new_settlement)
         await db.flush()
 
-
         expense_groups = [
             settlement["splits"]
             for settlement in friend_settlement_data["settlements"]
@@ -203,7 +208,7 @@ async def settle_up_friend_overall_api(
         ]
 
         settlements = []
-        
+
         for splits in expense_groups:
             expense = splits[0].expense
 
@@ -247,7 +252,9 @@ async def settle_up_friend_overall_api(
                             "expense": expense,
                             "settled_amount": amount_to_transfer,
                             "remaining_debt_for_this_expense": (
-                                0 if remaining_debt_for_this_expense <= 0 else remaining_debt_for_this_expense
+                                0
+                                if remaining_debt_for_this_expense <= 0
+                                else remaining_debt_for_this_expense
                             ),
                         }
                     )

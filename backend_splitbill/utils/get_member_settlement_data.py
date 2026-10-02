@@ -7,7 +7,9 @@ from backend_splitbill.utils.get_main_settlement_logic import get_main_settlemen
 
 async def get_member_settlement_data(group_id: int, user_id: int, db, current_user):
     # if group doesn't exist
-    result = await db.execute(select(Group).where(Group.id == group_id, Group.is_deleted.is_(False)))
+    result = await db.execute(
+        select(Group).where(Group.id == group_id, Group.is_deleted.is_(False))
+    )
     existed_group = result.scalars().one_or_none()
 
     if not existed_group:

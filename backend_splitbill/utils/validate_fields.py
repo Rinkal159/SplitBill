@@ -1,7 +1,8 @@
 from backend_splitbill.utils.validate_participants import validate_participants
 from backend_splitbill.utils.validations_on_expense import validate_payments_and_splits
-from fastapi import  HTTPException, status
+from fastapi import HTTPException, status
 from decimal import Decimal
+
 
 async def validate_fields(group_id, db, expense, participant_ids, current_user):
     # ^ participants validation
@@ -21,7 +22,7 @@ async def validate_fields(group_id, db, expense, participant_ids, current_user):
         participant_ids=participant_ids,
         total_amount=expense.total_amount,
         item_name="payment",
-        value_field="amount"
+        value_field="amount",
     )
 
     # ^ splits validation
@@ -31,7 +32,10 @@ async def validate_fields(group_id, db, expense, participant_ids, current_user):
             detail="Equal splits does not require split values",
         )
 
-    if expense.split_method in {"amount", "percentage"} and expense.expense_splits is None:
+    if (
+        expense.split_method in {"amount", "percentage"}
+        and expense.expense_splits is None
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Amount and percentage splits require split values",

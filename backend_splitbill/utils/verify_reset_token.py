@@ -1,6 +1,7 @@
 from fastapi import HTTPException, status
 from backend_splitbill.auth.authentication import verify_token
 
+
 def verify_reset_token(reset_token):
     # if not got the reset_token then OTP was not verified at first place
     if not reset_token:
@@ -17,5 +18,5 @@ def verify_reset_token(reset_token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid reset token"
         )
-    
+
     return payload

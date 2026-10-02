@@ -9,12 +9,14 @@ class Base(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-#* UserCreate
+# * UserCreate
 class UserCreate(Base):
     name: Annotated[str, Field(min_length=4, max_length=100)]
     email: EmailStr
     password: Annotated[str, Field(min_length=8)]
-    mobile_number: Annotated[str, Field(min_length=10, max_length=10, pattern=r"^\d{10}$")]
+    mobile_number: Annotated[
+        str, Field(min_length=10, max_length=10, pattern=r"^\d{10}$")
+    ]
 
     @classmethod
     def as_form(
@@ -32,7 +34,7 @@ class UserCreate(Base):
             raise RequestValidationError(e.errors())
 
 
-#* UserResponse
+# * UserResponse
 class UserResponse(Base):
     id: int
     name: str
@@ -41,28 +43,23 @@ class UserResponse(Base):
     updated_at: datetime
 
 
-#* UserLogin
+# * UserLogin
 class UserLogin(Base):
     email: EmailStr
     password: str
 
 
-#* ForgotPassword
+# * ForgotPassword
 class ForgotPassword(Base):
     email: EmailStr
-    
 
-#* VerifyOTP
+
+# * VerifyOTP
 class VerifyOTP(Base):
     email: EmailStr
-    otp: Annotated[
-        str,
-        Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
-    ]
-    
-    
-#* ResetPassword
+    otp: Annotated[str, Field(min_length=6, max_length=6, pattern=r"^\d{6}$")]
+
+
+# * ResetPassword
 class ResetPassword(Base):
-    new_password: Annotated[str, Field(
-        min_length=8
-    )]
+    new_password: Annotated[str, Field(min_length=8)]

@@ -6,6 +6,7 @@ from backend_splitbill.services.hash_password_otp import hash
 
 from backend_splitbill.model import User, PasswordResetOTP
 
+
 async def forgot_password(db, email):
     user = await db.execute(select(User).where(User.email == email.email))
     existed_user = user.scalars().one_or_none()

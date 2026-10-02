@@ -4,7 +4,9 @@ from backend_splitbill.auth.authentication import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete
 from sqlalchemy.orm import selectinload
-from backend_splitbill.utils.get_member_settlement_data import get_member_settlement_data
+from backend_splitbill.utils.get_member_settlement_data import (
+    get_member_settlement_data,
+)
 from backend_splitbill.utils.get_registered_and_guest_invitees_of_group import (
     get_registered_and_guest_invitees_of_group,
 )
@@ -1030,10 +1032,10 @@ async def admin_transfered_api(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Member not found",
             )
-            
+
         existed_member.role = GroupMemberRole.ADMIN
         group_admin.role = GroupMemberRole.MEMBER
-        
+
         # creating group history
         new_group_history = GroupHistory(
             group_id=group_id,
@@ -1042,11 +1044,12 @@ async def admin_transfered_api(
             performed_by=current_user.id,
         )
         db.add(new_group_history)
-        
+
         await db.commit()
     except Exception:
         await db.rollback()
         raise
-    
-    return {"message" : f"{existed_member.name} has been promoted to admin successfully!"}
-    
+
+    return {
+        "message": f"{existed_member.name} has been promoted to admin successfully!"
+    }
