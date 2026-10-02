@@ -10,7 +10,7 @@ class Base(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-#* InvitationCreate
+# * InvitationCreate
 class InvitationCreate(Base):
     email: EmailStr | None = None
     mobile_number: Annotated[str | None, Field(pattern=r"^\d{10}$")] = None
@@ -26,7 +26,7 @@ class InvitationCreate(Base):
         return self
 
 
-#* InvitationUpdate
+# * InvitationUpdate
 class InvitationUpdateStatus(str, Enum):
     ACCEPTED = "ACCEPTED"
     REJECTED = "REJECTED"
@@ -36,7 +36,7 @@ class InvitationUpdate(Base):
     status: InvitationUpdateStatus
 
 
-#* InvitationResponse
+# * InvitationResponse
 class UserDetail(Base):
     id: int
     name: str
@@ -49,28 +49,33 @@ class InvitationsResponse(Base):
     id: int
     status: InvitationStatus
     created_at: datetime
-    
-    
+
+
 class InvitationReceivedResponse(InvitationsResponse):
     inviter: UserDetail
-    
-    
+
+
 class InvitationSentResponse(InvitationsResponse):
     invitee: UserDetail | None
     invitee_email: EmailStr | None
     invitee_mobile_number: str | None
-    
 
 
-#* FriendProfileResponse
+# * FriendProfileResponse
 class GroupDetail(Base):
     id: int
     name: str
     description: str | None
     creator: UserDetail
-    
-    
+
+
 class FriendProfileResponse(Base):
     friend: UserDetail
     total_balance: Decimal
     common_groups: list[GroupDetail]
+
+
+# * FriendsName
+class FriendsName(Base):
+    id: int
+    name: str
