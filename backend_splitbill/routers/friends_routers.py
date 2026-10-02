@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend_splitbill.auth.authentication import get_current_user
 from decimal import Decimal
 from backend_splitbill.utils.friendship_checks import friendship_checks
+from backend_splitbill.utils.getFriends import getFriends
 
 from backend_splitbill.schemas.friends_schema import (
     InvitationCreate as InvitationCreateSchema,
@@ -14,6 +15,7 @@ from backend_splitbill.schemas.friends_schema import (
     InvitationUpdate as InvitationUpdateSchema,
     UserDetail as UserDetailSchema,
     FriendProfileResponse as FriendProfileResponseSchema,
+    FriendsName as FriendsNameSchema,
 )
 from backend_splitbill.model import (
     User,
@@ -308,20 +310,17 @@ async def cancel_invitation_api(
 async def get_friends_api(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
+    friends = await getFriends(db=db, current_user=current_user)
+    return friends
 
-    # get all the friend ids
-    friends_ids = {
-        *[friend.friend_id for friend in current_user.sent_friendships],
-        *[friend.user_id for friend in current_user.received_friendships],
-    }
 
-    if not friends_ids:
-        return []
-
-    # get all friends in just one query
-    result = await db.execute(select(User).where(User.id.in_(friends_ids)))
-
-    return result.scalars().all()
+# * get only names of friends
+@friends_router.get("/name", response_model=list[FriendsNameSchema])
+async def get_friends_name_api(
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
+):
+    friends = await getFriends(db=db, current_user=current_user)
+    return friends
 
 
 # * remove a friend
