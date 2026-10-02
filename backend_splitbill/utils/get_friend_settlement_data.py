@@ -9,6 +9,11 @@ from backend_splitbill.utils.get_creditors_debtors import get_creditors_debtors
 from decimal import Decimal
 from backend_splitbill.utils.get_settlement_groups import get_settlement_groups
 from backend_splitbill.utils.get_main_settlement_logic import get_main_settlement_logic
+from backend_splitbill.utils.get_all_expenses_in_which_user_involved import (
+    get_all_expenses_in_which_user_involved,
+)
+from backend_splitbill.utils.get_friend_balances import get_friend_balances
+from backend_splitbill.utils.get_expenses_with_friend import get_expenses_with_friend
 
 from backend_splitbill.model import Friends, ExpenseSplits, User
 
@@ -20,31 +25,28 @@ async def get_friend_settlement_data(
     current_user=Depends(get_current_user),
 ):
     friend = await db.execute(select(User).where(User.id == friend_id))
+
+    expense_ids = await get_expenses_with_friend(db, current_user, friend_id)
     
-    your_expenses = select(ExpenseSplits.expense_id).where(
-        ExpenseSplits.user_id == current_user.id
-    )
-
-    expenses_you_and_friend_involved = await db.execute(
-        select(ExpenseSplits.expense_id).where(
-            ExpenseSplits.user_id == friend_id,
-            ExpenseSplits.expense_id.in_(your_expenses),
-        )
-    )
-
-    expense_ids = expenses_you_and_friend_involved.scalars().all()
-
     expense_groups = await get_expense_groups(
-        expense_ids=expense_ids, db=db, newest_first=True
+        expense_ids=expense_ids["expense_ids"], db=db, newest_first=True
     )
 
-    settlements, total_balance = await get_main_settlement_logic(
-        expense_groups=expense_groups, db=db, you=current_user, other=friend_id
+    (
+        settlements,
+        friend_balances,
+        total_balance,
+    ) = await get_all_expenses_in_which_user_involved(
+        expense_ids=expense_ids["expense_ids"],
+        db=db,
+        current_user=current_user,
+        friend_id=friend_id,
     )
 
     return {
         "friend": friend.scalars().one_or_none(),
         "expense_groups": expense_groups,
         "settlements": settlements,
+        "friend_balances": friend_balances,
         "total_balance": total_balance,
     }
