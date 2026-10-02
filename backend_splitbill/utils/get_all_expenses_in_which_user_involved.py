@@ -4,15 +4,22 @@ from backend_splitbill.utils.get_creditors_debtors import get_creditors_debtors
 from backend_splitbill.schemas.expense_schema import UserDetail as UserDetailSchema
 from decimal import Decimal
 
-async def get_all_expenses_in_which_user_involved(expense_ids, db, current_user):
+
+async def get_all_expenses_in_which_user_involved(
+    expense_ids, db, current_user, friend_id=None
+):
     # sorted in descending order of expense date
     expense_groups = await get_expense_groups(
         expense_ids=expense_ids, db=db, newest_first=True
     )
 
     settlements = []
+    total_balance_with_friend = Decimal("0")
+    friend_balances = {}
 
     for splits in expense_groups:
+        users_involed = [split.user_id for split in splits]
+
         settlement_groups = await get_settlement_groups(splits, db)
         expense = splits[0].expense
 
@@ -25,6 +32,8 @@ async def get_all_expenses_in_which_user_involved(expense_ids, db, current_user)
 
         your_logs = []
         other_logs = []
+        your_balance = Decimal("0")
+        your_expensewise_balance_with_friend = Decimal("0")
 
         while i < len(creditors) and j < len(debtors):
             creditor = creditors[i]
@@ -35,6 +44,28 @@ async def get_all_expenses_in_which_user_involved(expense_ids, db, current_user)
 
             transfer = min(creditor_balance, debtor_balance)
 
+            if friend_id and friend_id not in users_involed:
+                if creditor["user"].id == current_user.id:
+                    friend_balances[debtor["user"].id] = (
+                        friend_balances.get(debtor["user"].id, Decimal("0")) + transfer
+                    )
+                elif debtor["user"].id == current_user.id:
+                    friend_balances[creditor["user"].id] = (
+                        friend_balances.get(creditor["user"].id, Decimal("0"))
+                        - transfer
+                    )
+
+                creditor["balance"] -= transfer
+                debtor["balance"] += transfer
+
+                if creditor["balance"] <= Decimal("0"):
+                    i += 1
+
+                if abs(debtor["balance"]) <= Decimal("0"):
+                    j += 1
+
+                continue
+
             # you're a creditor then you "lent"
             if creditor["user"].id == current_user.id:
                 your_logs.append(
@@ -42,6 +73,15 @@ async def get_all_expenses_in_which_user_involved(expense_ids, db, current_user)
                         "to_user": UserDetailSchema.model_validate(debtor["user"]),
                         "amount": transfer,
                     }
+                )
+                your_balance += transfer
+                
+                if friend_id and debtor["user"].id == friend_id:
+                    total_balance_with_friend += transfer
+                    your_expensewise_balance_with_friend += transfer
+
+                friend_balances[debtor["user"].id] = (
+                    friend_balances.get(debtor["user"].id, Decimal("0")) + transfer
                 )
 
             # you're a debtor then you "borrowed"
@@ -51,6 +91,15 @@ async def get_all_expenses_in_which_user_involved(expense_ids, db, current_user)
                         "to_user": UserDetailSchema.model_validate(creditor["user"]),
                         "amount": -transfer,
                     }
+                )
+                your_balance -= transfer
+                
+                if friend_id and creditor["user"].id == friend_id:
+                    total_balance_with_friend -= transfer
+                    your_expensewise_balance_with_friend -= transfer
+                    
+                friend_balances[creditor["user"].id] = (
+                    friend_balances.get(creditor["user"].id, Decimal("0")) - transfer
                 )
 
             # other settlements
@@ -72,12 +121,17 @@ async def get_all_expenses_in_which_user_involved(expense_ids, db, current_user)
             if abs(debtor["balance"]) <= Decimal("0"):
                 j += 1
 
+        if friend_id and friend_id not in users_involed:
+            continue
+
         settlements.append(
             {
                 "expense": expense,
                 "your_settlements": your_logs,
                 "other_settlements": other_logs,
+                "your_balance": your_balance,
+                "your_expensewise_balance_with_friend": your_expensewise_balance_with_friend
             }
         )
-        
-    return settlements
+
+    return settlements, friend_balances, total_balance_with_friend
