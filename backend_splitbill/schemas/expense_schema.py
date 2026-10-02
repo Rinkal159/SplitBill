@@ -22,7 +22,7 @@ class ExpenseSplitSchema(Base):
 
 class ExpenseCreate(Base):
     group_id: int | None = None
-    
+
     title: Annotated[str, Field(min_length=1, max_length=100)]
     description: Annotated[str | None, Field(min_length=10, max_length=1000)] = None
     note: Annotated[str | None, Field(min_length=10, max_length=1000)] = None
@@ -35,21 +35,21 @@ class ExpenseCreate(Base):
 
     split_method: Literal["equal", "amount", "percentage"]
     expense_splits: list[ExpenseSplitSchema] | None = None
-    
-    
-#* ExpenseCreateResponse
+
+
+# * ExpenseCreateResponse
 class UserDetail(Base):
     id: int
     name: str
     profile_picture_path: str
 
-    
+
 class GroupDetail(Base):
     name: str
     description: str | None
     creator: UserDetail
-    
-    
+
+
 class ExpenseCreateResponse(Base):
     id: int
     group: GroupDetail | None
@@ -59,7 +59,7 @@ class ExpenseCreateResponse(Base):
     note: str | None
     total_amount: Decimal
     expense_date: date
-    
+
 
 # * ExpenseResponse
 class ExpenseDetail(Base):
@@ -68,7 +68,9 @@ class ExpenseDetail(Base):
     title: str
     total_amount: Decimal
     expense_date: date
-    
+    created_by: int
+    creator: UserDetail
+
 
 class YourSettlementSchema(Base):
     to_user: UserDetail
@@ -85,14 +87,12 @@ class ExpenseSchema(Base):
     expense: ExpenseDetail
     your_settlements: list[YourSettlementSchema]
     other_settlements: list[SettlementSchema]
+    your_balance: Decimal
 
 
-class ExpensesResponse(Base):
-    expenses: list[ExpenseSchema]
-    
-    
 class PaginatedExpensesResponse(Base):
-    expenses: ExpensesResponse
+    expenses: list[ExpenseSchema]
+    friend_balances: dict
     page: int
     skip: int
     limit: int
@@ -118,12 +118,20 @@ class BorrowingsAndLendings(Base):
 
 
 # * FriendsSettlements
-class FriendsSettlements(Base):
-    expense: ExpenseDetail
-    net_balance: Decimal
+class FriendExpenseSchema(ExpenseSchema):
+    your_expensewise_balance_with_friend: Decimal
 
-
+    
 class FriendsSettlementsResponse(Base):
     friend: UserDetail
-    settlements: list[FriendsSettlements]
+    settlements: list[FriendExpenseSchema]
+    friend_balances: dict
     total_balance: Decimal
+    
+    
+# * TotalBalanceWithFriend
+class TotalBalanceWithFriend(Base):
+    friend: UserDetail
+    total_balance: Decimal
+    had_expenses: bool
+    
