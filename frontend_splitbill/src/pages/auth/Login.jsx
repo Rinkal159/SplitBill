@@ -63,7 +63,7 @@ function Login() {
               <h2 className="text-2xl font-normal text-slate-800 tracking-tight">
                 Log into your
                 {/* <br /> */}
-                <span className="heading-shadow p-2">
+                <span className="glittery-shadow p-2">
                   SplitBill account
                 </span>
               </h2>
@@ -89,6 +89,7 @@ function Login() {
                 placeholder={"Your email"}
                 handleEvent={(e) => handleChange(e, "email")}
                 showError={false}
+                required={true}
               />
 
               {/* Password */}
@@ -100,6 +101,7 @@ function Login() {
                 placeholder={"Yourpassword"}
                 handleEvent={(e) => handleChange(e, "password")}
                 showError={false}
+                required={true}
               />
 
               <Link
