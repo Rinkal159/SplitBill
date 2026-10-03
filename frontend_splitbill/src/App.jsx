@@ -11,6 +11,8 @@ import AuthenticatedBody from "./layout/AuthenticatedBody";
 import Dashboard from "./pages/dashboard/Dashboard";
 import ResetPassword from "./pages/auth/ResetPassword";
 import ProtectedResetPassword from "./pages/auth/ProtectedResetPassword";
+import AddExpense from "./pages/expense/AddExpense";
+import AllExpenses from "./pages/expense/AllExpenses";
 
 function App() {
   return (
@@ -31,6 +33,8 @@ function App() {
           {/* authenticated */}
           <Route element={<AuthenticatedBody />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/expenses/add" element={<AddExpense />} />
+            <Route path="/expenses" element={<AllExpenses />} />
           </Route>
         </Routes>
       </BrowserRouter>
