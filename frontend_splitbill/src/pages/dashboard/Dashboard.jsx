@@ -7,6 +7,9 @@ import Activities from "./Activities";
 import InviteFriend from "../friend/InviteFriend";
 import FriendsInvitations from "../friend/FriendsInvitations";
 import GroupInvitations from "../group/GroupInvitations";
+import AllExpenses from "../expense/AllExpenses";
+import FriendExpenses from "../friend/FriendExpenses";
+import Friends from "../friend/Friends";
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState({});
@@ -14,19 +17,18 @@ function Dashboard() {
   const [contentRenderer, setContentRenderer] = useState("Dashboard");
   const [friends, setFriends] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [invitations, setInvitations] = useState([
-    "Friend invitations",
-    "Group invitations",
-  ]);
+  const invitations = ["Friend invitations", "Group invitations"];
   const [showFriendInviteModal, setShowFriendInviteModal] = useState(false);
 
   // sentInvitations is here because when user invites some user, sent friend invitations should update, and the InviteFriend and FriendsInvitations common parent is Dashboard
   const [sentInvitations, setSentInvitations] = useState([]);
 
+  const [selectedFriend, setSelectedFriend] = useState(null);
+
   const sidebarTitles = [
     "Dashboard",
     "Activities",
-    "All expenses",
+    "All Expenses",
     "Friends",
     "Groups",
     "Invitations",
@@ -44,36 +46,20 @@ function Dashboard() {
   const getSentFriendInvitations = async () => {
     try {
       const response = await api.get("/friends/invitations/sent");
-      console.log(response.data);
-
       setSentInvitations(response.data);
     } catch (error) {}
-  };
-
-  const content = {
-    Dashboard: <BorrowingsAndLendings dashboardData={dashboardData} />,
-    Activities: <Activities />,
-    FriendInvitations: (
-      <FriendsInvitations
-        sentInvitations={sentInvitations}
-        setSentInvitations={setSentInvitations}
-        onInvitationAccepted={getFriends}
-      />
-    ),
-    GroupInvitations: <GroupInvitations />,
   };
 
   useEffect(() => {
     const getDashboardData = async () => {
       try {
         const response = await api.get("/expenses/me");
-        setDashboardData(response.data);
-        setDashboardData((prevDashboardData) => ({
-          ...prevDashboardData,
-          total_balance:
-            prevDashboardData.total_lendings -
-            prevDashboardData.total_borrowings,
-        }));
+        const data = response.data;
+
+        setDashboardData({
+          ...data,
+          total_balance: data.total_lendings - data.total_borrowings,
+        });
       } catch (error) {
         console.log(error);
       }
@@ -92,8 +78,50 @@ function Dashboard() {
     getSentFriendInvitations();
   }, []);
 
+  useEffect(() => {
+    setContent((prevContent) => ({
+      ...prevContent,
+      Dashboard: <BorrowingsAndLendings dashboardData={dashboardData} />,
+    }));
+  }, [dashboardData]);
+
+  useEffect(() => {
+    setContent((prevContent) => ({
+      ...prevContent,
+      FriendInvitations: (
+        <FriendsInvitations
+          sentInvitations={sentInvitations}
+          setSentInvitations={setSentInvitations}
+          onInvitationAccepted={getFriends}
+        />
+      ),
+    }));
+  }, [sentInvitations]);
+
+  useEffect(() => {
+    if (selectedFriend) {
+      setContent((prevContent) => ({
+        ...prevContent,
+        FriendExpenses: <FriendExpenses friend={selectedFriend} />,
+      }));
+    }
+  }, [selectedFriend]);
+
+  const [activeSubvalue, setActiveSubValue] = useState(null);
+
+  const onFriendClickEvent = (friend) => {
+    setSelectedFriend(friend);
+    setActiveSubValue(friend.id);
+    setactiveSidebarTitle("Friends");
+    setContentRenderer("FriendExpenses");
+  };
+
   const handlePlusClick = (e, title) => {
     e.stopPropagation();
+
+    console.log("CLICKED");
+    console.log(title);
+    
 
     if (title == "Friends") {
       setShowFriendInviteModal(true);
@@ -101,13 +129,39 @@ function Dashboard() {
     }
   };
 
+  const [content, setContent] = useState({
+    Dashboard: <BorrowingsAndLendings dashboardData={{}} />,
+    Activities: <Activities />,
+    FriendInvitations: (
+      <FriendsInvitations
+        sentInvitations={sentInvitations}
+        setSentInvitations={setSentInvitations}
+        onInvitationAccepted={getFriends}
+      />
+    ),
+    GroupInvitations: <GroupInvitations />,
+    AllExpenses: <AllExpenses />,
+    FriendExpenses: <FriendExpenses />,
+    Friends: (
+      <Friends
+        onClickEvent={onFriendClickEvent}
+        onPlusClickEvent={handlePlusClick}
+      />
+    ),
+  });
+
   const handleSubvalueClick = (subvalue) => {
+    setActiveSubValue(subvalue);
     if (subvalue === "Friend invitations") {
       setactiveSidebarTitle("Invitations");
       setContentRenderer("FriendInvitations");
-    } else {
+    } else if (subvalue === "Group invitations") {
       setactiveSidebarTitle("Invitations");
       setContentRenderer("GroupInvitations");
+    } else {
+      if (subvalue.email) {
+        onFriendClickEvent(subvalue);
+      }
     }
   };
 
@@ -121,7 +175,8 @@ function Dashboard() {
             <div
               onClick={() => {
                 setactiveSidebarTitle(title);
-                setContentRenderer(title);
+                const titleWithoutSpaces = title.replace(/\s/g, "");
+                setContentRenderer(titleWithoutSpaces);
               }}
             >
               <SidebarTitles
@@ -141,6 +196,7 @@ function Dashboard() {
                 }
                 handlePlusClick={(e) => handlePlusClick(e, title)}
                 handleSubvalueClick={handleSubvalueClick}
+                activeSubvalue={activeSubvalue}
               />
             </div>
           ))}
