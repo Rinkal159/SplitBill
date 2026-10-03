@@ -38,7 +38,7 @@ function BorrowingsAndLendings({dashboardData}) {
               <ul className="w-full">
                 {dashboardData.borrowings.map((borrow) => (
                   <li
-                    className="flex justify-center pb-4 pt-2 items-center px-8 hover:bg-slate-100 hover:cursor-pointer"
+                    className="flex justify-center pb-4 pt-2 items-center px-8 hover:bg-gradient-to-br from-sky-100/70 via-white to-sky-100/70 hover:cursor-pointer"
                     key={borrow.borrowed_from.id}
                   >
                     <img
@@ -67,15 +67,15 @@ function BorrowingsAndLendings({dashboardData}) {
 
         {/* Lendings */}
         <div className="flex-1">
-          <div className="flex flex-col items-center px-8">
+          <div className="flex flex-col items-center w-full">
             <h1 className="text-2xl font-medium bg-gradient-to-r from-green-500 via-green-400 to-green-600 bg-clip-text text-transparent py-4 text-center">
               Lendings
             </h1>
 
             {dashboardData?.total_lendings > 0 && (
-              <ul>
+              <ul className="w-full">
                 {dashboardData.lendings.map((lend) => (
-                  <li className="flex py-2 items-center" key={lend.lent_to.id}>
+                  <li className="flex justify-center pb-4 pt-2 items-center px-8 hover:bg-gradient-to-br from-sky-100/70 via-white to-sky-100/70 hover:cursor-pointer" key={lend.lent_to.id}>
                     <img
                       className="small-img"
                       src={lend.lent_to.profile_picture_path}
@@ -83,7 +83,7 @@ function BorrowingsAndLendings({dashboardData}) {
                     />
 
                     <div className="flex flex-col ml-2">
-                      <p className="font-medium text-xs">{lend.lent_to.name}</p>
+                      <p className="font-normal hover:cursor-pointer">{lend.lent_to.name}</p>
                       <p className="text-xs text-green-500">
                         You lent{" "}
                         <span className="font-medium">₹{lend.amount}</span>
