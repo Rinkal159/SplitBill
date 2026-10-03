@@ -163,7 +163,7 @@ export default function Signup() {
               <h2 className="text-2xl font-normal text-slate-800 tracking-tight">
                 Create your
                 {/* <br /> */}
-                <span className="heading-shadow p-2">
+                <span className="glittery-shadow p-2">
                   SplitBill account
                 </span>
               </h2>
@@ -234,6 +234,7 @@ export default function Signup() {
                 type={"text"}
                 person={person}
                 placeholder={"Your full name"}
+                required={true}
                 handleEvent={(e) => handlePersonChange(e, "name")}
               />
 
@@ -246,6 +247,7 @@ export default function Signup() {
                 placeholder={"Your email"}
                 handleEvent={handleEmailChange}
                 showError={true}
+                required={true}
                 errors={errors}
               />
 
@@ -259,6 +261,7 @@ export default function Signup() {
                 handleEvent={handleMobileNumberChange}
                 showError={true}
                 errors={errors}
+                required={true}
               />
 
               {/* Password */}
@@ -271,6 +274,7 @@ export default function Signup() {
                 handleEvent={handlePasswordChange}
                 showError={true}
                 errors={errors}
+                required={true}
               />
 
               {/* Submit Button */}

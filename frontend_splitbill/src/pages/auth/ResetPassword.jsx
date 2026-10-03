@@ -79,7 +79,6 @@ function ResetPassword() {
       const response = await api.post("/auth/reset-password", {
         new_password: passwords.new_password,
       });
-      console.log(response);
 
       return navigate("/login")
     } catch (error) {
@@ -122,6 +121,7 @@ function ResetPassword() {
                 handleEvent={handleNewPasswordChange}
                 showError={true}
                 errors={errors}
+                required={true}
               />
 
               {/* Confirm password */}
@@ -134,6 +134,7 @@ function ResetPassword() {
                 handleEvent={handleConfirmPasswordChange}
                 showError={true}
                 errors={errors}
+                required={true}
               />
 
               {/* Submit Button */}
