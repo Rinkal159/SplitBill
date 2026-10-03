@@ -8,13 +8,14 @@ function LabelAndInput({
   placeholder,
   handleEvent,
   showError,
-  errors = []
+  errors = [],
+  required = false
 }) {
   const validErrors = errors.length > 0 && typeof errors === "string" ? errors : errors[field]; 
   return (
     <div className="space-y-2">
       <label htmlFor={field} className="form-lbl">
-        {labelValue}
+        {labelValue}{required && <span className="text-red-400 text-sm">*</span>}
       </label>
       <input
         className="form-input"
@@ -23,7 +24,7 @@ function LabelAndInput({
         name={field}
         value={typeof person === "string" ? person : person[field]}
         autoComplete="off"
-        required
+        required={required}
         placeholder={placeholder}
         onChange={handleEvent}
       />
