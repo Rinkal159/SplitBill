@@ -592,11 +592,11 @@ class Group(Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     
     @property
-    def group_picture_url(self):
+    def group_picture_path(self):
         if self.group_picture:
             url, _ = cloudinary_url(self.group_picture)
             return url
-        return None
+        return "/default_group_picture.png"
 
     # who created this group
     creator: Mapped["User"] = relationship(
@@ -732,6 +732,13 @@ class GroupInvitation(Base):
         foreign_keys=[inviter_id],
         back_populates="group_invitations",
         lazy="selectin",
+    )
+    
+    # invitee
+    invitee: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[invitee_id],
+        lazy="selectin"
     )
     
     # history of this invitation
