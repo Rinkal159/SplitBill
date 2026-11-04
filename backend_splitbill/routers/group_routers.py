@@ -33,12 +33,15 @@ from backend_splitbill.schemas.group_schema import (
     GroupCreate as GroupCreateSchema,
     GroupUpdate as GroupUpdateSchema,
     AdditionalInvitations as AdditionalInvitationsSchema,
-    InvitationResponse as InvitationResponseSchema,
+    SentInvitationRespose as SentInvitationResposeSchema,
+    ReceivedInvitationResponse as ReceivedInvitationResponseSchema,
     InvitationUpdate as InvitationUpdateSchema,
     InvitationUpdateStatus,
     GroupResponse as GroupResponseSchema,
+    GroupNameResponse as GroupNameResponseSchema,
     SingleGroupResponse as SingleGroupResponseSchema,
     ExpenseWithSpecificMemberResponse as ExpenseWithSpecificMemberResponseSchema,
+    GroupsSentInvitations as GroupsSentInvitationsSchema
 )
 
 group_router = APIRouter(prefix="/api/groups", tags=["Groups"])
@@ -150,6 +153,52 @@ async def create_group_api(
     return {"group": new_group, "total_members": 1}
 
 
+# * get groups in which you're a member or admin - only names
+@group_router.get("/name", response_model=list[GroupNameResponseSchema])
+async def get_groups_name_api(
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
+):
+    result = await db.execute(
+        select(GroupMember)
+        .join(Group)
+        .where(GroupMember.user_id == current_user.id, Group.is_deleted.is_(False))
+        .options(
+                    selectinload(GroupMember.group))
+        .order_by(GroupMember.joined_at.desc())
+    )
+    groups = result.scalars().all()
+
+    if not groups:
+        return []
+
+    return groups
+
+
+# * get group's sent invitations
+@group_router.get("/{group_id}/invitations/sent", response_model=GroupsSentInvitationsSchema)
+async def get_groups_sent_invitations_api(group_id: int, db:AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    try:
+        # if group doesn't exist
+        result = await db.execute(
+            select(Group).where(Group.id == group_id, Group.is_deleted == False)
+        )
+        existed_group = result.scalars().one_or_none()
+
+        if not existed_group:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Group not found"
+            )
+
+        result = await db.execute(select(GroupInvitation).where(GroupInvitation.group_id == group_id, GroupInvitation.status == InvitationStatus.PENDING))
+        existed_group_invitations = result.scalars().all()
+        
+    except:
+        await db.rollback()
+        raise
+    
+    return {"invitees" : existed_group_invitations}
+
+
 # * upload group picture
 @group_router.post("/{group_id}/picture")
 async def upload_group_picture(
@@ -206,7 +255,7 @@ async def upload_group_picture(
 
 # * get group
 @group_router.get("/{group_id}", response_model=SingleGroupResponseSchema)
-async def get_group_api(
+async def get_individual_group_api(
     group_id: int,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -249,7 +298,7 @@ async def get_group_api(
 
 
 # * update group info
-@group_router.patch("/{group_id}")
+@group_router.patch("/{group_id}", response_model=GroupResponseSchema)
 async def update_group_api(
     group_id: int,
     group: GroupUpdateSchema = Depends(GroupUpdateSchema.as_form),
@@ -258,6 +307,7 @@ async def update_group_api(
     current_user=Depends(get_current_user),
 ):
     try:
+        print(group)
         # if group doesn't exist
         result = await db.execute(
             select(Group).where(Group.id == group_id, Group.is_deleted.is_(False))
@@ -289,13 +339,18 @@ async def update_group_api(
 
         # if new group picture
         if groupPicture and groupPicture.filename:
-            group_picture_public_id = upload_picture_on_cloudinary(
-                file=groupPicture, folder="group_pictures"
+            old_picture_id = existed_group.group_picture
+        
+            new_picture_id = upload_picture_on_cloudinary(
+                file=groupPicture,
+                folder="group_pictures",
             )
-            existed_group.group_picture = group_picture_public_id
-
-            delete_picture_from_cloudinary(existed_group.group_picture)
-
+        
+            existed_group.group_picture = new_picture_id
+        
+            if old_picture_id:
+                delete_picture_from_cloudinary(old_picture_id)
+        
             is_new = True
 
         group_dict = group.model_dump(exclude_unset=True)
@@ -316,13 +371,18 @@ async def update_group_api(
                 performed_by=current_user.id,
             )
             db.add(new_group_history)
+            
+        result = await db.execute(select(Group).where(Group.id == group_id))
+        new_group = result.scalars().one_or_none()
+        
+        
 
         await db.commit()
     except:
         await db.rollback()
         raise
 
-    return {"message": "Group updated successfully!"}
+    return {"group": new_group}
 
 
 # * send additional invitations
@@ -334,6 +394,8 @@ async def send_invitations(
     current_user=Depends(get_current_user),
 ):
     try:
+        print(invitations)
+        
         # if group doesn't exist
         result = await db.execute(
             select(Group).where(Group.id == group_id, Group.is_deleted == False)
@@ -400,21 +462,22 @@ async def send_invitations(
             for invitation in group_invitations
             if invitation.invitee_mobile_number
         }
+        
 
         # group invitations to "registered" invitees
         for existed in existed_invitees:
 
             # self invitation
             if existed.id == current_user.id:
-                continue
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot send invitation to yourself")
 
             # already a group member
             if existed.id in group_members:
-                continue
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{existed.name} is already a group member")
 
             # already sent invitation
             if existed.id in already_sent_invitee_ids:
-                continue
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"You already have sent invitation to {existed.name}")
 
             new_group_invitation = GroupInvitation(
                 group_id=existed_group.id,
@@ -440,7 +503,7 @@ async def send_invitations(
 
             # already sent invitation
             if email in already_sent_invitee_emails:
-                continue
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"You already have sent invitation to {email}")
 
             new_group_invitation = GroupInvitation(
                 group_id=existed_group.id,
@@ -466,7 +529,7 @@ async def send_invitations(
 
             # already sent invitation
             if mobile_number in already_sent_invitee_mobile_numbers:
-                continue
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"You already have sent invitation to {mobile_number}")
 
             new_group_invitation = GroupInvitation(
                 group_id=existed_group.id,
@@ -495,8 +558,42 @@ async def send_invitations(
     return {"message": "Sent invitations successfully!"}
 
 
-# * get group invitations
-@group_router.get("/invitations", response_model=list[InvitationResponseSchema])
+# * determine whether you're admin or not
+@group_router.get("/{group_id}/admin")
+async def check_admin_api(group_id: int, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    try:
+        # if group doesn't exist
+        result = await db.execute(
+            select(Group).where(Group.id == group_id, Group.is_deleted == False)
+        )
+        existed_group = result.scalars().one_or_none()
+
+        if not existed_group:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Group not found"
+            )
+
+        # checking if admin
+        result = await db.execute(
+            select(GroupMember).where(
+                GroupMember.group_id == group_id,
+                GroupMember.user_id == current_user.id,
+                GroupMember.role == GroupMemberRole.ADMIN,
+            )
+        )
+        admin = result.scalars().one_or_none()
+        
+    except:
+        await db.rollback()
+        raise
+    
+    return {"is_admin" : True if admin else False}
+    
+
+# * get received group invitations
+@group_router.get(
+    "/invitations/received", response_model=list[ReceivedInvitationResponseSchema]
+)
 async def get_group_invitations_api(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
@@ -510,9 +607,10 @@ async def get_group_invitations_api(
         )
     )
 
-    existed_invitations = result.scalars().all()
+    received_invitations = result.scalars().all()
+    
 
-    return existed_invitations
+    return received_invitations
 
 
 # * accept or reject group inviatation
@@ -523,6 +621,7 @@ async def action_on_group_invitation_api(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
+    print(invitation_id)
     # if invitation doesn't exist
     result = await db.execute(
         select(GroupInvitation)
@@ -575,6 +674,27 @@ async def action_on_group_invitation_api(
     await db.commit()
 
     return {"message": f"Invitation {new_status.status.value.lower()} successfully!"}
+
+
+# * get sent group invitations
+@group_router.get("/invitations/sent", response_model=list[SentInvitationResposeSchema])
+async def get_sent_group_invitations_api(
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
+):
+    result = await db.execute(
+        select(GroupInvitation)
+        .join(Group)
+        .where(
+            GroupInvitation.inviter_id == current_user.id,
+            GroupInvitation.status == InvitationStatus.PENDING,
+            Group.is_deleted.is_(False),
+        )
+    )
+    sent_invitations = result.scalars().all()
+
+    return sent_invitations
+
+
 
 
 # * cancel group invitation
@@ -643,7 +763,7 @@ async def cancel_group_invitation_api(
 
 # * get groups in which you're a member or admin
 @group_router.get("/", response_model=list[GroupResponseSchema])
-async def get_groups_api(
+async def get_group_api(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
     result = await db.execute(
@@ -1053,3 +1173,6 @@ async def admin_transfered_api(
     return {
         "message": f"{existed_member.name} has been promoted to admin successfully!"
     }
+
+
+
