@@ -4,6 +4,7 @@ from backend_splitbill.model import InvitationStatus, GroupMemberRole
 from enum import Enum
 from datetime import datetime, date
 from decimal import Decimal
+from fastapi import Form
 
 
 class Base(BaseModel):
@@ -38,7 +39,11 @@ class GroupUpdate(Base):
     description: Annotated[str | None, Field(min_length=10, max_length=1000)] = None
 
     @classmethod
-    def as_form(cls, name, description):
+    def as_form(
+        cls,
+        name: str | None = Form(default=None),
+        description: str | None = Form(default=None),
+    ):
         return cls(name=name, description=description)
 
 
@@ -51,22 +56,31 @@ class AdditionalInvitations(Base):
 class UserDetail(Base):
     id: int
     name: str
-    profile_picture: str
+    email: EmailStr
+    profile_picture_path: str
 
 
 class GroupDetail(Base):
     id: int
     name: str
     description: str | None
-    group_picture: str | None
+    group_picture_path: str
     creator: UserDetail
 
 
 class InvitationResponse(Base):
     id: int
-    status: InvitationStatus
     group: GroupDetail
+    updated_at: datetime
+    
+    
+class ReceivedInvitationResponse(InvitationResponse):
     inviter: UserDetail
+    
+class SentInvitationRespose(InvitationResponse):
+    invitee: UserDetail | None
+    invitee_email: EmailStr | None
+    invitee_mobile_number: str | None
 
 
 # * InvitationUpdate
@@ -86,13 +100,17 @@ class GroupMembers(Base):
 
 
 class GroupDetailWithMembers(GroupDetail):
+    id: int
     members: list[GroupMembers]
 
 
 class GroupResponse(Base):
     group: GroupDetailWithMembers
-    role: GroupMemberRole
-    joined_at: datetime
+    
+
+# * GroupNameResponse
+class GroupNameResponse(Base):
+    group: GroupDetail
 
 
 # * SingleGroupResponse
@@ -119,3 +137,16 @@ class ExpenseWithSpecificMemberResponse(Base):
     member: UserDetail
     settlements: list[SettlementsWithMember]
     total_balance: Decimal
+    
+    
+    
+# * GroupsSentInvitations
+class InviteeDetails(Base):
+    invitee: UserDetail | None
+    invitee_email: EmailStr | None
+    invitee_mobile_number: str | None
+    
+    
+class GroupsSentInvitations(Base):
+    invitees: list[InviteeDetails]
+    
