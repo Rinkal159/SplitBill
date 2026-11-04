@@ -177,9 +177,9 @@ def create_summary_for_group(row, current_user_id):
             return f"{"You" if performed_by.id ==current_user_id else performer_name } transferred admin rights to {guest} in {group_name}"
 
     elif action == GroupHistoryAction.GROUP_INVITATION_ACCEPTED.value:
-        if affected_user:
-            affected_name = affected_user.name
-            return f"{affected_name} accepted group invitation for {group_name}"
+        if performed_by:
+            performer_name = performed_by.name
+            return f"{performer_name} accepted group invitation for {group_name}"
         else:
             guest = row.get("affected_guest", "a member")
             return f"{guest} accepted group invitation for {group_name}"
@@ -244,10 +244,7 @@ async def get_activities_api(
 ):
     # Base queries without summary
     expense_query = select(
-        case(
-            (ExpenseHistory.group_id == None, literal("EXPENSE")),
-            else_=literal("GROUP_EXPENSE"),
-        ).label("type"),
+        literal("EXPENSE").label("type"),
         ExpenseHistory.group_id.label("group_id"),
         cast(ExpenseHistory.action, String).label("action"),
         ExpenseHistory.performed_by.label("performed_by"),
@@ -269,10 +266,8 @@ async def get_activities_api(
     )
 
     settlement_query = select(
-        case(
-            (Settlement.expense_id != None, literal("EXPENSEWISE_SETTLEMENT")),
-            (Settlement.group_id != None, literal("GROUPWISE_SETTLEMENT")),
-            else_=literal("OVERALL_SETTLEMENT"),
+        literal(
+            "SETTLEMENT"
         ).label("type"),
         Settlement.group_id.label("group_id"),
         case(
@@ -490,7 +485,7 @@ async def get_activities_api(
 
         activity = {
             "type": row["type"],
-            "group_name": row["group_obj"].name if row["group_obj"] else None,
+            "group": row["group_obj"] if row["group_obj"] else None,
             "action": row["action"],
             "performed_by": row["performed_by_user"],
             "affected_user": row["affected_user_obj"],
