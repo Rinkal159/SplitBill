@@ -25,7 +25,7 @@ class ExpenseHistoryResponse(Base):
 class UserDetail(Base):
     id: int
     name: str
-    profile_picture: str
+    profile_picture_path: str
 
 
 class SettlementHistoryResponse(Base):
