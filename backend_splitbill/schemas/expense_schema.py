@@ -93,6 +93,7 @@ class ExpenseSchema(Base):
 class PaginatedExpensesResponse(Base):
     expenses: list[ExpenseSchema]
     friend_balances: dict
+    total_balance: Decimal
     page: int
     skip: int
     limit: int
@@ -121,17 +122,16 @@ class BorrowingsAndLendings(Base):
 class FriendExpenseSchema(ExpenseSchema):
     your_expensewise_balance_with_friend: Decimal
 
-    
+
 class FriendsSettlementsResponse(Base):
     friend: UserDetail
     settlements: list[FriendExpenseSchema]
     friend_balances: dict
     total_balance: Decimal
-    
-    
+
+
 # * TotalBalanceWithFriend
 class TotalBalanceWithFriend(Base):
     friend: UserDetail
     total_balance: Decimal
     had_expenses: bool
-    
