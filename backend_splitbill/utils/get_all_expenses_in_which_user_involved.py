@@ -14,6 +14,7 @@ async def get_all_expenses_in_which_user_involved(
     )
 
     settlements = []
+    total_balance = Decimal("0")
     total_balance_with_friend = Decimal("0")
     friend_balances = {}
 
@@ -75,6 +76,7 @@ async def get_all_expenses_in_which_user_involved(
                     }
                 )
                 your_balance += transfer
+                total_balance+= transfer
                 
                 if friend_id and debtor["user"].id == friend_id:
                     total_balance_with_friend += transfer
@@ -93,6 +95,7 @@ async def get_all_expenses_in_which_user_involved(
                     }
                 )
                 your_balance -= transfer
+                total_balance -= transfer
                 
                 if friend_id and creditor["user"].id == friend_id:
                     total_balance_with_friend -= transfer
@@ -108,7 +111,7 @@ async def get_all_expenses_in_which_user_involved(
                     {
                         "from_user": UserDetailSchema.model_validate(debtor["user"]),
                         "to_user": UserDetailSchema.model_validate(creditor["user"]),
-                        "amount": transfer,
+                        "amount": -transfer,
                     }
                 )
 
@@ -134,4 +137,4 @@ async def get_all_expenses_in_which_user_involved(
             }
         )
 
-    return settlements, friend_balances, total_balance_with_friend
+    return settlements, friend_balances, total_balance_with_friend, total_balance
