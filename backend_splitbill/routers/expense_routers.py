@@ -39,7 +39,7 @@ from backend_splitbill.schemas.expense_schema import (
     BorrowingsAndLendings as BorrowingsAndLendingsSchema,
     FriendsSettlementsResponse as FriendsSettlementsResponseSchema,
     UserDetail as UserDetailSchema,
-    TotalBalanceWithFriend as TotalBalanceWithFriendSchema
+    TotalBalanceWithFriend as TotalBalanceWithFriendSchema,
 )
 from backend_splitbill.model import (
     Friends,
@@ -311,11 +311,11 @@ async def get_single_expense(
         )
 
     # get settlements for this expense
-    settlements = await get_all_expenses_in_which_user_involved(
+    expenses, friend_balances, total_balance_with_friend, total_balance = await get_all_expenses_in_which_user_involved(
         expense_ids=[expense_id], db=db, current_user=current_user
     )
 
-    return {"expenses": settlements}
+    return {"expenses": expenses}
 
 
 # * get all expenses in which you're involved - All expenses - PAGINATED
@@ -350,7 +350,7 @@ async def get_all_expenses_api(
 
     # friend_balances =  await get_friend_balances(expense_ids=all_expense_ids, db=db, current_user=current_user)
 
-    expenses, friend_balances, total_balance = (
+    expenses, friend_balances, total_balance_with_friend, total_balance = (
         await get_all_expenses_in_which_user_involved(
             expense_ids=expense_ids, db=db, current_user=current_user
         )
@@ -359,6 +359,7 @@ async def get_all_expenses_api(
     return {
         "expenses": expenses,
         "friend_balances": friend_balances,
+        "total_balance":total_balance,
         "page": page,
         "skip": skip,
         "limit": limit,
@@ -423,12 +424,14 @@ async def get_all_group_expenses_api(
     )
     expense_ids = result.scalars().all()
 
-    expenses = await get_all_expenses_in_which_user_involved(
+    expenses, friend_balances, total_balance_with_friend, total_balance = await get_all_expenses_in_which_user_involved(
         expense_ids=expense_ids, db=db, current_user=current_user
     )
 
     return {
         "expenses": expenses,
+        "friend_balances": friend_balances,
+        "total_balance" : total_balance,
         "page": page,
         "skip": skip,
         "limit": limit,
@@ -473,7 +476,7 @@ async def getTotalBalanceWithFriend(
     )
 
     total_balance = Decimal("0")
-    had_expenses= False
+    had_expenses = False
 
     for splits in expense_groups:
         settlement_groups = await get_settlement_groups(splits, db)
@@ -515,10 +518,14 @@ async def getTotalBalanceWithFriend(
             if abs(debtor["balance"]) <= Decimal("0"):
                 j += 1
 
-    return {"friend": friend, "total_balance": total_balance, "had_expenses" : had_expenses}
+    return {
+        "friend": friend,
+        "total_balance": total_balance,
+        "had_expenses": had_expenses,
+    }
 
 
-#* get total balance with all friends
+# * get total balance with all friends
 @expense_router.get(
     "/friends/balances/all", response_model=list[TotalBalanceWithFriendSchema]
 )
@@ -552,13 +559,12 @@ async def getTotalBalanceWithAllFriends(
         friend_id: {
             "friend": friends_by_id[friend_id],
             "total_balance": Decimal("0"),
-            "had_expenses": False
+            "had_expenses": False,
         }
         for friend_id in your_friends
         if friend_id in friends_by_id
     }
-    
-    
+
     for splits in expense_groups:
         settlement_groups = await get_settlement_groups(splits, db)
 
