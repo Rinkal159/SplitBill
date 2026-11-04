@@ -79,3 +79,4 @@ class FriendProfileResponse(Base):
 class FriendsName(Base):
     id: int
     name: str
+    email: EmailStr
