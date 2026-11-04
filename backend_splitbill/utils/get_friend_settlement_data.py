@@ -35,7 +35,8 @@ async def get_friend_settlement_data(
     (
         settlements,
         friend_balances,
-        total_balance,
+        total_balance_with_friend,
+        total_balance
     ) = await get_all_expenses_in_which_user_involved(
         expense_ids=expense_ids["expense_ids"],
         db=db,
@@ -48,5 +49,5 @@ async def get_friend_settlement_data(
         "expense_groups": expense_groups,
         "settlements": settlements,
         "friend_balances": friend_balances,
-        "total_balance": total_balance,
+        "total_balance": total_balance_with_friend,
     }
