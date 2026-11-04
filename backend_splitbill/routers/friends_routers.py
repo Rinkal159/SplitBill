@@ -159,7 +159,7 @@ async def invite_friend_api(
     return {"message": "Invitation sent successfully!"}
 
 
-# * get all the invitations you got
+# * get received invitations
 @friends_router.get(
     "/invitations/received", response_model=list[InvitationReceivedResponseSchema]
 )
@@ -177,7 +177,7 @@ async def get_invitations_api(
     return existed_invitations
 
 
-# * get all sent invitations
+# * get sent invitations
 @friends_router.get(
     "/invitations/sent", response_model=list[InvitationSentResponseSchema]
 )
