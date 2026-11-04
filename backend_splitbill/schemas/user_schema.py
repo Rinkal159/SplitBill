@@ -38,6 +38,7 @@ class UserCreate(Base):
 class UserResponse(Base):
     id: int
     name: str
+    email: EmailStr
     profile_picture_path: str
     created_at: datetime
     updated_at: datetime
