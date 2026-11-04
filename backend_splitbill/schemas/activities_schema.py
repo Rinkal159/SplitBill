@@ -12,15 +12,17 @@ class UserDetail(Base):
     id: int
     name: str
     profile_picture_path: str
-
-
+    
+    
 class GroupDetail(Base):
+    id: int
     name: str
+    group_picture_path: str
 
 
 class ActivitiesResponse(Base):
     type: str
-    group_name: GroupDetail | None
+    group: GroupDetail | None
     action: str
     performed_by: UserDetail
     affected_user: UserDetail | None
@@ -28,7 +30,7 @@ class ActivitiesResponse(Base):
     performed_by_me: bool
     performed_at: datetime
     amount_settled: Decimal | None
-    summary: str
+    summary: str | None
 
 
 class PaginatedActivitiesResponse(Base):
