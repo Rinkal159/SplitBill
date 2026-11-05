@@ -28,7 +28,7 @@ export default function Index() {
                 <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-medium tracking-tight leading-[1.1] md:leading-[1.15] text-slate-800">
                   Split bills.
                   <br />
-                  <span className="heading-shadow">Settle easily.</span>
+                  <span className="glittery-shadow">Settle easily.</span>
                 </h1>
 
                 <p className="text-md sm:text-xl md:text-xl text-slate-500/90 lg:mt-8 mt-6  max-w-xl leading-relaxed font-medium">

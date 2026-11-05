@@ -6,7 +6,7 @@ function ReceivedAndSentButton({visible, onClick, value}) {
       onClick={onClick}
       className={`${
         visible == value
-          ? `heading-shadow border-sky-500`
+          ? `glittery-shadow border-sky-500`
           : `text-slate-500 hover:text-slate-700 hover:border-slate-400/80`
       } toggleButtons capitalize`}
     >
