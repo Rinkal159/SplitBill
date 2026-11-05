@@ -1,14 +1,8 @@
 import React from "react";
+import formatDate from "../../utils/formatDate";
 
 function InviterDetail({ onClose, user, date, message }) {
-  const createdAt = new Date(date).toLocaleDateString(
-    "en-IN",
-    {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    },
-  );
+  const createdAt = formatDate(date);
 
   return (
     <div
@@ -24,11 +18,12 @@ function InviterDetail({ onClose, user, date, message }) {
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-4 top-4 text-xl text-slate-400 transition hover:text-slate-700"
+          className="absolute right-4 top-4 text-xl text-slate-400 trans hover:text-slate-700"
         >
           ✕
         </button>
 
+        {/* image */}
         <div className="flex justify-center">
           <img
             src={user.profile_picture_path}
