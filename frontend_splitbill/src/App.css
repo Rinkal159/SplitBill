@@ -13,11 +13,11 @@
     }
 
     .form-lbl {
-        @apply text-xs font-medium text-slate-600 uppercase tracking-wider
+        @apply text-xs font-medium text-slate-600 uppercase tracking-wider inline-block
     }
 
     .btn {
-        @apply w-full py-3 mt-2 bg-gradient-to-r from-sky-600 via-sky-500 to-blue-600 text-white font-medium rounded-xl shadow-md shadow-sky-200/50 hover:shadow-lg hover:shadow-sky-300/40 hover:scale-[1.01] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-md disabled:hover:shadow-sky-200/50
+        @apply w-full py-3 mt-2 bg-gradient-to-r from-sky-600 via-sky-500 to-blue-600 text-white font-medium rounded-xl shadow-md shadow-sky-200/50 hover:shadow-lg hover:shadow-sky-300/40 hover:scale-[1.01] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-md disabled:hover:shadow-sky-200/50 disabled:text-white
     }
 
     .glittery-shadow {
@@ -39,7 +39,7 @@
     }
 
     .invitation-btn {
-        @apply border py-1 px-3 rounded-3xl
+        @apply border py-1 px-3 rounded-3xl transition duration-200 ease-in-out hover:-translate-y-0.5 
     }
 
     .accept-text {
@@ -79,11 +79,48 @@
 
     /** individual boxes */
     .box {
-        @apply shadow-sm shadow-slate-200 hover:border-blue-200 hover:bg-gradient-to-br from-sky-50/80 via-white to-sky-50/80 hover:shadow-md hover:cursor-pointer
+        @apply shadow-sm shadow-slate-200 hover:border-blue-200 hover:bg-gradient-to-br from-sky-50/80 via-white to-sky-50/80 hover:shadow-md hover:cursor-default
     }
     .active-box {
         @apply bg-gradient-to-br from-sky-50/80 via-white to-sky-50/80 shadow-md shadow-blue-100/80
     }
+
+    .pending-box {
+        @apply shadow-sm shadow-slate-200 hover:border-amber-200 hover:bg-gradient-to-br from-amber-50/80 via-white to-amber-50/80 hover:shadow-md hover:cursor-default
+    }
+
+
+    /** common */
+    .trans {
+        @apply transition-all duration-200 ease-in-out
+    }
+
+    .invite-img {
+        @apply w-16 h-16 rounded-full object-cover
+        border-2 border-white shadow-md
+    }
+
+
+    /** modal */
+    .outer-modal {
+        @apply fixed inset-0 z-50 flex justify-center items-center bg-slate-900/40 backdrop-blur-sm px-4
+    }
+
+    .inner-modal {
+        @apply relative w-full max-w-lg rounded-2xl border border-blue-100/60 bg-gradient-to-br from-blue-50 via-white to-blue-50 p-8
+    }
+
+    .cancel-icon {
+        @apply absolute right-4 top-4 text-xl text-slate-400 transition hover:text-slate-700
+    }
+
+    .italic-text {
+        @apply text-sm text-slate-500 italic
+    }
+}
+
+.slow-loading {
+  animation-duration: 3s;
 }
 
 .form-lbl:has(+ .form-input:focus) {
