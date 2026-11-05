@@ -4,24 +4,40 @@ import Error from "../error/Error";
 import InvitationActionButton from "./InvitationActionButton";
 import InviterDetail from "./InviterDetail";
 import ReceivedAndSentButton from "./ReceivedAndSentButton";
+import Loading from "../loading/Loading";
+import getBackendError from "../../utils/getBackendError";
 
-const FriendsInvitations = ({
+export default function FriendsInvitations({
   sentInvitations,
   setSentInvitations,
   onInvitationAccepted,
-}) => {
+  sentFriendInvitationsLoading,
+}) {
   const [visible, setVisible] = useState("received");
   const [receivedInvitations, setReceivedInvitations] = useState([]);
   // sentInvitations state is in Dashboard
-  const [pageErrors, setPageErrors] = useState([]);
   const [showProfileModal, setShowProfileModal] = useState([false, null]);
+
+  // loading
+  const [loading, setLoading] = useState({
+    sent: true, // not used, loading for sent is coming from dashboard
+    received: true,
+  });
+
+  // error
+  const [backErrors, setBackErrors] = useState({});
 
   const getReceivedInvitations = async () => {
     try {
       const response = await api.get("/friends/invitations/received");
       setReceivedInvitations(response.data);
+
+      setLoading((prevLoading) => ({
+        ...prevLoading,
+        received: false,
+      }));
     } catch (error) {
-      setPageErrors([error.response?.data.error]);
+      setBackErrors(getBackendError(error));
     }
   };
 
@@ -46,32 +62,31 @@ const FriendsInvitations = ({
         await onInvitationAccepted();
       }
     } catch (error) {
-      setPageErrors([error.response?.data.error]);
+      setBackErrors(getBackendError(error));
     }
   };
 
   const handleInvitationCancel = async (id) => {
     try {
       const response = await api.delete(`/friends/invitations/${id}`);
-      console.log(response.data);
 
       //   remove this cancelled invitation from invitations feed
       setSentInvitations((prevInvitation) =>
         prevInvitation.filter((invitation) => invitation.id !== id),
       );
     } catch (error) {
-      setPageErrors([error.response?.data.error]);
+      setBackErrors(getBackendError(error));
     }
   };
 
   return (
-    <div className="mx-4">
-      <h1 className="text-2xl heading-shadow text-center py-4 pt-6">
+    <div className="">
+      <h1 className="text-2xl glittery-shadow text-center py-4 pt-6">
         Friends Invitations
       </h1>
 
       {/* sent or received toggles */}
-      <div className="flex gap-3 pb-4">
+      <div className="flex gap-3 pb-4 px-4">
         <ReceivedAndSentButton
           value={"received"}
           visible={visible}
@@ -84,18 +99,27 @@ const FriendsInvitations = ({
         />
       </div>
 
-      {pageErrors.length > 0 && <Error errors={pageErrors} />}
+      {Object.keys(backErrors).length !== 0 && (
+        <Error errors={backErrors.error} type={backErrors.type} />
+      )}
 
       <main>
         {/* received invitations */}
         {visible == "received" ? (
-          receivedInvitations.length > 0 ? (
+          loading.received ? (
+            <div className="flex justify-center">
+              <Loading msg={"Received friend invitations"} padding={false} />
+            </div>
+          ) : receivedInvitations.length > 0 ? (
             <ul>
               {receivedInvitations.map((invite) => (
-                <div key={invite.id} className="flex gap-2 items-center py-4">
+                <div
+                  key={invite.id}
+                  className="flex gap-3 items-center p-4 py-5"
+                >
                   <img
                     onClick={() => setShowProfileModal([true, invite])}
-                    className="small-img !w-16 !h-16"
+                    className="invite-img"
                     src={invite.inviter.profile_picture_path}
                     alt={invite.inviter.name}
                   />
@@ -106,7 +130,7 @@ const FriendsInvitations = ({
                     <div className="flex gap-2">
                       <InvitationActionButton
                         value={"Accept"}
-                        btnClass={"accpet-btn-shadow"}
+                        btnClass={"accept-text accpet-btn-shadow"}
                         onClick={() =>
                           handleInvitationActionButtonClick(
                             invite.id,
@@ -116,7 +140,7 @@ const FriendsInvitations = ({
                       />
                       <InvitationActionButton
                         value={"Reject"}
-                        btnClass={"reject-btn-shadow"}
+                        btnClass={"reject-text reject-btn-shadow"}
                         onClick={() =>
                           handleInvitationActionButtonClick(
                             invite.id,
@@ -131,25 +155,32 @@ const FriendsInvitations = ({
             </ul>
           ) : (
             <h1 className="text-center text-base font-medium leading-relaxed text-slate-500">
-              You don't have any pending invitations.
+              You don't have any pending friend invitations.
               <br />
-              <span className="text-sm font-normal text-slate-400">
+              <span className="text-sm font-normal text-slate-400 italic">
                 Send an invitation and start making friends.
               </span>
             </h1>
           )
         ) : // sent invitations
-        sentInvitations.length > 0 ? (
+        sentFriendInvitationsLoading ? (
+          <div className="flex justify-center">
+            <Loading msg={"Sent friend invitations"} padding={false} />
+          </div>
+        ) : sentInvitations.length > 0 ? (
           <ul>
             {sentInvitations.map((invitation) => (
-              <div key={invitation.id} className="flex gap-2 items-center py-4">
+              <div
+                key={invitation.id}
+                className="group flex gap-2 items-center p-4 py-5 box"
+              >
                 <div className="flex gap-2">
                   <img
                     onClick={() =>
                       invitation.invitee &&
                       setShowProfileModal([true, invitation])
                     }
-                    className={`small-img !w-16 !h-16 ${!invitation.invitee && "hover:scale-100 hover:cursor-default"}`}
+                    className={`invite-img trans ${invitation.invitee && "group-hover:scale-105 hover:cursor-pointer"}`}
                     src={
                       invitation.invitee
                         ? invitation.invitee.profile_picture_path
@@ -158,7 +189,13 @@ const FriendsInvitations = ({
                     alt={invitation.invitee ? invitation.invitee.name : "Guest"}
                   ></img>{" "}
                   <div className="flex flex-col gap-1 items-start">
-                    <h1 className="text-slate-700 font-medium">
+                    <h1
+                      onClick={() =>
+                        invitation.invitee &&
+                        setShowProfileModal([true, invitation])
+                      }
+                      className="text-slate-700 font-medium group-hover:glittery-shadow hover:cursor-pointer hover:underline"
+                    >
                       {invitation.invitee
                         ? invitation.invitee.name
                         : invitation.invitee_email ||
@@ -166,7 +203,7 @@ const FriendsInvitations = ({
                     </h1>
                     <InvitationActionButton
                       value={"Cancel"}
-                      btnClass={"reject-btn-shadow"}
+                      btnClass={"reject-text reject-btn-shadow"}
                       onClick={() => handleInvitationCancel(invitation.id)}
                     />
                   </div>
@@ -176,9 +213,9 @@ const FriendsInvitations = ({
           </ul>
         ) : (
           <h1 className="text-center text-base font-medium leading-relaxed text-slate-500">
-            You don't have any sent invitations.
+            You don't have any sent friend invitations.
             <br />
-            <span className="text-sm font-normal text-slate-400">
+            <span className="text-sm font-normal text-slate-400 italic">
               Send an invitation and start making friends.
             </span>
           </h1>
@@ -203,6 +240,4 @@ const FriendsInvitations = ({
       )}
     </div>
   );
-};
-
-export default FriendsInvitations;
+}
