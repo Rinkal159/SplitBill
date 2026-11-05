@@ -22,7 +22,7 @@ function Navbar() {
           <Link to="/expenses/add" className="btn !mt-0 !bg-gradient-to-r from-sky-600/80 via-sky-500/80 to-blue-500 px-4">Add Expense</Link>
           <button className="btn !mt-0 !bg-gradient-to-r from-sky-600/80 via-sky-500/80 to-blue-500 px-4">Settle up</button>
           <img
-            className="w-14 h-14 rounded-full overflow-hidden border border-slate-200/80 bg-slate-50"
+            className="w-14 h-14 rounded-full object-cover overflow-hidden border border-slate-200/80 bg-slate-50"
             src={user.profile_picture_path}
             alt="Profie picture"
           />
