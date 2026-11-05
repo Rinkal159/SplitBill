@@ -1,3 +1,5 @@
+import formatAmount from "../../utils/formatAmount";
+
 {
   /* name, how much borrowed/lent and settle up */
 }
@@ -37,7 +39,7 @@ function FriendHeader({ friendExpenses, onClickEvent }) {
                     : "accept-text"
                 }`}
               >
-                ₹{Math.abs(friendExpenses.total_balance)}
+                ₹{formatAmount(Math.abs(friendExpenses.total_balance))}
               </span>
             </p>
           )

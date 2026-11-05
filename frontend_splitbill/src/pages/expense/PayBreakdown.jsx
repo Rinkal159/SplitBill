@@ -1,4 +1,5 @@
 import React from "react";
+import formatAmount from "../../utils/formatAmount";
 
 function PayBreakdown({
   heading,
@@ -80,7 +81,7 @@ function PayBreakdown({
 
           <p className="text-base font-semibold text-blue-600">
             {showRupee && <span>₹</span>}
-            {totalAmount}
+            {formatAmount(totalAmount)}
             {!showRupee && <span>%</span>}
           </p>
         </div>

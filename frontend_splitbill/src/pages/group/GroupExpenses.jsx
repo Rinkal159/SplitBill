@@ -6,6 +6,7 @@ import GroupCreate from "./GroupCreate";
 import GroupDetails from "./GroupDetails";
 import Loading from "../loading/Loading";
 import getBackendError from "../../utils/getBackendError";
+import formatAmount from "../../utils/formatAmount";
 
 function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
   const { user } = useContext(AuthContext);
@@ -90,7 +91,7 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
                   <span
                     className={`${expenses.total_balance < 0 ? "reject-text" : "accept-text"}`}
                   >
-                    ₹{Math.abs(expenses.total_balance)}
+                    ₹{formatAmount(Math.abs(expenses.total_balance))}
                   </span>
                 </p>
               )}
@@ -191,7 +192,7 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
                             Settled
                           </span>
                         ) : (
-                          "₹" + Math.abs(balance)
+                          "₹" + formatAmount(Math.abs(balance))
                         )}
                       </p>
                     </div>
@@ -235,7 +236,7 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
                     </h1>
 
                     <p className="text-2xl font-semibold text-slate-800">
-                      ₹{expense.expense.total_amount}
+                      ₹{formatAmount(expense.expense.total_amount)}
                     </p>
 
                     {expense.expense.description && (
@@ -304,7 +305,7 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
                                       : "font-semibold reject-text"
                                   }
                                 >
-                                  ₹{Math.abs(your.amount)}
+                                  ₹{formatAmount(Math.abs(your.amount))}
                                 </span>{" "}
                                 {your.amount > 0 ? "to" : "from"}{" "}
                                 <span className="font-semibold text-slate-800">
@@ -350,7 +351,7 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
                                     : "font-semibold reject-text"
                                 }
                               >
-                                ₹{Math.abs(other.amount)}
+                                ₹{formatAmount(Math.abs(other.amount))}
                               </span>{" "}
                               {other.amount > 0 ? "to" : "from"}{" "}
                               <span className="font-semibold text-slate-800">

@@ -4,6 +4,7 @@ import formatDate from "../../utils/formatDate.js";
 import { AuthContext } from "../../context/AuthProvider.jsx";
 import Loading from "../loading/Loading.jsx";
 import getBackendError from "../../utils/getBackendError.js";
+import formatAmount from "../../utils/formatAmount.js";
 
 export default function AllExpenses() {
   const { user } = useContext(AuthContext);
@@ -113,7 +114,7 @@ export default function AllExpenses() {
                       {Math.abs(balance) === 0 ? (
                         <span className="text-sm text-slate-600">Settled</span>
                       ) : (
-                        "₹" + Math.abs(balance)
+                        "₹" + formatAmount(Math.abs(balance))
                       )}
                     </p>
                   </div>
@@ -157,7 +158,7 @@ export default function AllExpenses() {
                   </h1>
 
                   <p className="text-2xl font-semibold text-slate-800">
-                    ₹{expense.expense.total_amount}
+                    ₹{formatAmount(expense.expense.total_amount)}
                   </p>
 
                   {expense.expense.description && (
@@ -226,7 +227,7 @@ export default function AllExpenses() {
                                     : "font-semibold reject-text"
                                 }
                               >
-                                ₹{Math.abs(your.amount)}
+                                ₹{formatAmount(Math.abs(your.amount))}
                               </span>{" "}
                               {your.amount > 0 ? "to" : "from"}{" "}
                               <span className="font-semibold text-slate-800">
@@ -271,7 +272,7 @@ export default function AllExpenses() {
                                   : "font-semibold reject-text"
                               }
                             >
-                              ₹{Math.abs(other.amount)}
+                              ₹{formatAmount(Math.abs(other.amount))}
                             </span>{" "}
                             {other.amount > 0 ? "to" : "from"}{" "}
                             <span className="font-semibold text-slate-800">

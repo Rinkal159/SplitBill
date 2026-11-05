@@ -4,6 +4,7 @@ import formatDate from "../../utils/formatDate";
 import { AuthContext } from "../../context/AuthProvider";
 import Filter from "../group/Filter";
 import Loading from "../loading/Loading";
+import formatAmount from "../../utils/formatAmount";
 
 function FriendExpenses({ friend }) {
   const { user } = useContext(AuthContext);
@@ -89,7 +90,7 @@ function FriendExpenses({ friend }) {
                   <span
                     className={`${expenses.total_balance < 0 ? "reject-text" : "accept-text"}`}
                   >
-                    ₹{Math.abs(expenses.total_balance)}
+                    ₹{formatAmount(Math.abs(expenses.total_balance))}
                   </span>
                 </p>
               )}
@@ -199,7 +200,7 @@ function FriendExpenses({ friend }) {
                               Settled
                             </span>
                           ) : (
-                            "₹" + Math.abs(balance_with_friend)
+                            "₹" + formatAmount(Math.abs(balance_with_friend))
                           )}
                         </p>
                       </div>
@@ -240,7 +241,7 @@ function FriendExpenses({ friend }) {
                       </h1>
 
                       <p className="text-2xl font-semibold text-slate-800">
-                        ₹{expense.expense.total_amount}
+                        ₹{formatAmount(expense.expense.total_amount)}
                       </p>
 
                       {expense.expense.description && (
@@ -309,7 +310,7 @@ function FriendExpenses({ friend }) {
                                         : "font-semibold reject-text"
                                     }
                                   >
-                                    ₹{Math.abs(your.amount)}
+                                    ₹{formatAmount(Math.abs(your.amount))}
                                   </span>{" "}
                                   {your.amount > 0 ? "to" : "from"}{" "}
                                   <span className="font-semibold text-slate-800">
@@ -355,7 +356,7 @@ function FriendExpenses({ friend }) {
                                       : "font-semibold reject-text"
                                   }
                                 >
-                                  ₹{Math.abs(other.amount)}
+                                  ₹{formatAmount(Math.abs(other.amount))}
                                 </span>{" "}
                                 {other.amount > 0 ? "to" : "from"}{" "}
                                 <span className="font-semibold text-slate-800">
