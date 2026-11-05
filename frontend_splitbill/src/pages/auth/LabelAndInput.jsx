@@ -9,13 +9,15 @@ function LabelAndInput({
   handleEvent,
   showError,
   errors = [],
-  required = false
+  required = false,
 }) {
-  const validErrors = errors.length > 0 && typeof errors === "string" ? errors : errors[field]; 
+  const validErrors =
+    errors.length > 0 && typeof errors === "string" ? errors : errors[field];
   return (
     <div className="space-y-2">
       <label htmlFor={field} className="form-lbl">
-        {labelValue}{required && <span className="text-red-400 text-sm">*</span>}
+        {labelValue}
+        {required && <span className="text-red-400 text-sm">*</span>}
       </label>
       <input
         className="form-input"
@@ -29,7 +31,7 @@ function LabelAndInput({
         onChange={handleEvent}
       />
       {showError && validErrors && (
-        <div className="text-xs text-red-500 font-medium mt-1">
+        <div className="text-xs text-sky-600 font-medium mt-1">
           {validErrors}
         </div>
       )}
