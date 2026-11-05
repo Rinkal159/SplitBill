@@ -4,12 +4,17 @@ import { useContext } from "react";
 import Footer from "./Footer";
 import { Link } from "react-router-dom";
 import Navbar from "./Navbar";
+import Loading from "../pages/loading/Loading";
 
 export default function AuthenticatedBody() {
   const { user, loading } = useContext(AuthContext);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex justify-center">
+        <Loading msg={"Loading"} />
+      </div>
+    );
   }
 
   if (!user) {
@@ -26,10 +31,7 @@ export default function AuthenticatedBody() {
             Please log in to access this page and continue using SplitBill.
           </p>
 
-          <Link
-            to="/login"
-            className="btn py-2 px-6 m-4 !w-auto"
-          >
+          <Link to="/login" className="btn py-2 px-6 m-4 !w-auto">
             Log in
           </Link>
         </div>

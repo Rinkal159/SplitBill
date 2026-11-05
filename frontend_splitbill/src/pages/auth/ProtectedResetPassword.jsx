@@ -6,6 +6,7 @@ import Navbar from "../../layout/Navbar";
 import { Outlet } from "react-router-dom";
 import getBackendError from "../../utils/getBackendError";
 import Error from "../error/Error";
+import Loading from "../loading/Loading";
 
 function ProtectedResetPassword() {
   // loading
@@ -33,7 +34,7 @@ function ProtectedResetPassword() {
   }, []);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <Loading msg={"Loading"} />;
   }
 
   return valid ? (

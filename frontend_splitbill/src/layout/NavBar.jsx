@@ -3,12 +3,17 @@ import LoginAndSignup from "../pages/index/LoginAndSignup";
 import { useContext } from "react";
 import { AuthContext } from "../context/AuthProvider";
 import { Link } from "react-router-dom";
+import Loading from "../pages/loading/Loading";
 
 function Navbar() {
   const { user, loading } = useContext(AuthContext);
 
   if (loading) {
-    return <div>loading...</div>;
+    return (
+      <div className="flex justify-center items-center">
+        <Loading msg={"Loading"} />
+      </div>
+    );
   }
 
   return user ? (
@@ -19,8 +24,15 @@ function Navbar() {
         </h1>
 
         <div className="grid auto-cols-max grid-flow-col items-center gap-4">
-          <Link to="/expenses/add" className="btn !mt-0 !bg-gradient-to-r from-sky-600/80 via-sky-500/80 to-blue-500 px-4">Add Expense</Link>
-          <button className="btn !mt-0 !bg-gradient-to-r from-sky-600/80 via-sky-500/80 to-blue-500 px-4">Settle up</button>
+          <Link
+            to="/expenses/add"
+            className="btn !mt-0 !bg-gradient-to-r from-sky-600/80 via-sky-500/80 to-blue-500 px-4"
+          >
+            Add Expense
+          </Link>
+          <button className="btn !mt-0 !bg-gradient-to-r from-sky-600/80 via-sky-500/80 to-blue-500 px-4">
+            Settle up
+          </button>
           <img
             className="w-14 h-14 rounded-full object-cover overflow-hidden border border-slate-200/80 bg-slate-50"
             src={user.profile_picture_path}
