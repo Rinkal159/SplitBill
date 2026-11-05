@@ -7,22 +7,26 @@ import api from "../../api/axios";
 import LabelAndInput from "./LabelAndInput";
 import RedirectLinks from "./RedirectLinks";
 import { AuthContext } from "../../context/AuthProvider";
+import getBackendError from "../../utils/getBackendError"
 
 function Login() {
+  const { setUser } = useContext(AuthContext);
   const [person, setPerson] = new useState({
     email: "rinkalsingapuri@gmail.com",
-    password: "Rinkal@123",
+    password: "Rinkal@1234",
   });
 
-  const [pageErrors, setPageErrors] = new useState({});
-
+  // loading
   const [loading, setLoading] = new useState(false);
+
+  // error
+  const [backErrors, setBackErrors] = new useState({});
 
   const navigate = useNavigate();
 
-  const { setUser } = useContext(AuthContext);
-
   const handleChange = (e, field) => {
+    setBackErrors({});
+
     setPerson((prevPerson) => ({
       ...prevPerson,
       [field]: e.target.value,
@@ -43,10 +47,7 @@ function Login() {
       return navigate("/dashboard");
     } catch (error) {
       setLoading(false);
-      setPageErrors({
-        type: error.response?.status,
-        error: [error.response?.data.error],
-      });
+      setBackErrors(getBackendError(error));
     }
   };
 
@@ -63,9 +64,7 @@ function Login() {
               <h2 className="text-2xl font-normal text-slate-800 tracking-tight">
                 Log into your
                 {/* <br /> */}
-                <span className="glittery-shadow p-2">
-                  SplitBill account
-                </span>
+                <span className="glittery-shadow p-2">SplitBill account</span>
               </h2>
               <p className="mt-2 text-sm text-slate-400 max-w-xs ">
                 Pick up where you left off.
@@ -76,8 +75,8 @@ function Login() {
               className="w-full max-w-xs space-y-5 "
               onSubmit={handleSubmit}
             >
-              {Object.keys(pageErrors).length !== 0 && (
-                <Error errors={pageErrors.error} type={pageErrors.type} />
+              {Object.keys(backErrors).length !== 0 && (
+                <Error errors={backErrors.error} type={backErrors.type} />
               )}
 
               {/* Email */}

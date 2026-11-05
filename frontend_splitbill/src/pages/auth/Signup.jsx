@@ -6,6 +6,7 @@ import Error from "../error/Error";
 import Navbar from "../../layout/Navbar";
 import LabelAndInput from "./LabelAndInput";
 import RedirectLinks from "./RedirectLinks";
+import getBackendError from "../../utils/getBackendError"
 
 export default function Signup() {
   const [person, setPerson] = new useState({
@@ -14,22 +15,23 @@ export default function Signup() {
     mobileNumber: "",
     password: "",
   });
-
   const [imagePreview, setImagePreview] = new useState("../../../default.png");
 
-  const [errors, setErrors] = new useState({
+  // loading
+  const [loading, setLoading] = new useState(false);
+
+  // errors
+  const [frontErrors, setFrontErrors] = new useState({
     email: "",
     mobileNumber: "",
     password: "",
   });
-
-  const [pageErrors, setPageErrors] = new useState({});
-
-  const [loading, setLoading] = new useState(false);
+  const [backErrors, setBackErrors] = new useState({});
 
   const navigate = useNavigate();
 
   const handlePersonChange = (e, field) => {
+    setBackErrors({});
     setPerson((prevPerson) => ({
       ...prevPerson,
       [field]: e.target.value,
@@ -37,13 +39,14 @@ export default function Signup() {
   };
 
   const handleErrorsChange = (field, value) => {
-    setErrors((prevErrors) => ({
+    setFrontErrors((prevErrors) => ({
       ...prevErrors,
       [field]: value,
     }));
   };
 
   const handleEmailChange = (e) => {
+    setBackErrors({});
     handlePersonChange(e, "email");
 
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -59,6 +62,7 @@ export default function Signup() {
   };
 
   const handleMobileNumberChange = (e) => {
+    setBackErrors({});
     handlePersonChange(e, "mobileNumber");
 
     const mobileNumberRegex = /^\d+$/;
@@ -84,6 +88,7 @@ export default function Signup() {
   };
 
   const handlePasswordChange = (e) => {
+    setBackErrors({});
     handlePersonChange(e, "password");
 
     const value = e.target.value;
@@ -101,6 +106,7 @@ export default function Signup() {
   };
 
   const handleProfilePictureChange = (e) => {
+    setBackErrors({});
     const file = e.target.files[0];
 
     setPerson((prevPerson) => ({
@@ -115,7 +121,7 @@ export default function Signup() {
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
-    if (errors.email || errors.mobileNumber || errors.password) {
+    if (frontErrors.email || frontErrors.mobileNumber || frontErrors.password) {
       return;
     }
 
@@ -143,10 +149,7 @@ export default function Signup() {
       return navigate("/login");
     } catch (error) {
       setLoading(false);
-      setPageErrors({
-        type: error.response?.status,
-        error: [error.response?.data.error],
-      });
+      setBackErrors(getBackendError(error));
     }
   };
 
@@ -163,9 +166,7 @@ export default function Signup() {
               <h2 className="text-2xl font-normal text-slate-800 tracking-tight">
                 Create your
                 {/* <br /> */}
-                <span className="glittery-shadow p-2">
-                  SplitBill account
-                </span>
+                <span className="glittery-shadow p-2">SplitBill account</span>
               </h2>
               <p className="mt-2 text-sm text-slate-400 max-w-xs ">
                 Start splitting expenses with friends.
@@ -173,8 +174,8 @@ export default function Signup() {
             </div>
 
             <form className="space-y-5 " onSubmit={handleFormSubmit}>
-              {Object.keys(pageErrors).length !== 0 && (
-                <Error errors={pageErrors.error} type={pageErrors.type} />
+              {Object.keys(backErrors).length !== 0 && (
+                <Error errors={backErrors.error} type={backErrors.type} />
               )}
 
               {/* Profile picture */}
@@ -248,7 +249,7 @@ export default function Signup() {
                 handleEvent={handleEmailChange}
                 showError={true}
                 required={true}
-                errors={errors}
+                errors={frontErrors}
               />
 
               {/* Mobile Number */}
@@ -260,7 +261,7 @@ export default function Signup() {
                 placeholder={"i.e. 9876543210"}
                 handleEvent={handleMobileNumberChange}
                 showError={true}
-                errors={errors}
+                errors={frontErrors}
                 required={true}
               />
 
@@ -273,7 +274,7 @@ export default function Signup() {
                 placeholder={"At least 8 characters"}
                 handleEvent={handlePasswordChange}
                 showError={true}
-                errors={errors}
+                errors={frontErrors}
                 required={true}
               />
 
@@ -284,9 +285,9 @@ export default function Signup() {
                   !person.email ||
                   !person.mobileNumber ||
                   !person.password ||
-                  errors.email ||
-                  errors.mobileNumber ||
-                  errors.password || 
+                  frontErrors.email ||
+                  frontErrors.mobileNumber ||
+                  frontErrors.password ||
                   loading
                 }
                 className="btn"
@@ -296,7 +297,11 @@ export default function Signup() {
               </button>
 
               {/* Login link */}
-              <RedirectLinks message={"Already have an account?"} path={"/login"} value={"Log in"} />
+              <RedirectLinks
+                message={"Already have an account?"}
+                path={"/login"}
+                value={"Log in"}
+              />
             </form>
           </div>
         </div>

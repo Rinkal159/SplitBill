@@ -3,6 +3,7 @@ import Navbar from "../../layout/Navbar";
 import api from "../../api/axios";
 import Error from "../error/Error";
 import { useNavigate } from "react-router-dom";
+import getBackendError from "../../utils/getBackendError";
 
 function ForgotPassword() {
   const [cont, setCont] = useState({
@@ -10,11 +11,11 @@ function ForgotPassword() {
     otp: "",
   });
 
-  const [errors, setErrors] = useState({
+  // errors
+  const [frontErrors, setFrontErrors] = useState({
     email: "",
   });
-
-  const [pageErrors, setPageErrors] = useState([]);
+  const [backErrors, setBackErrors] = useState({});
 
   const [submittedEmail, setSubmittedEmail] = useState(false);
 
@@ -23,13 +24,15 @@ function ForgotPassword() {
   const navigate = useNavigate();
 
   const handleErrorsChange = (field, value) => {
-    setErrors((prevErrors) => ({
+    setFrontErrors((prevErrors) => ({
       ...prevErrors,
       [field]: value,
     }));
   };
 
   const handleEmailChange = (e) => {
+    setBackErrors({});
+
     const value = e.target.value;
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -56,7 +59,7 @@ function ForgotPassword() {
       });
       return response;
     } catch (error) {
-      setPageErrors({
+      setBackErrors({
         type: error.response?.status,
         error: [error.response?.data.error],
       });
@@ -82,6 +85,7 @@ function ForgotPassword() {
   }, [timer]);
 
   const handleOTPChange = (e) => {
+    setBackErrors({});
     const value = e.target.value;
 
     setCont((prevCont) => ({
@@ -97,7 +101,7 @@ function ForgotPassword() {
       const response = await api.post("/auth/verify-otp", cont);
       return navigate("/reset-password");
     } catch (error) {
-      setPageErrors([error.response?.data.error]);
+      setBackErrors(getBackendError(error));
     }
   };
 
@@ -115,8 +119,8 @@ function ForgotPassword() {
             </h2>
 
             <form className="w-full max-w-xl space-y-5 mt-6">
-              {Object.keys(pageErrors).length !== 0 && (
-                <Error errors={pageErrors} />
+              {Object.keys(backErrors).length !== 0 && (
+                <Error errors={backErrors.error} type={backErrors.type} />
               )}
 
               {/* Email */}
@@ -137,16 +141,16 @@ function ForgotPassword() {
                 <button
                   type="button"
                   onClick={handleVerifyEmail}
-                  disabled={!cont.email || errors.email || submittedEmail}
+                  disabled={!cont.email || frontErrors.email || submittedEmail}
                   className="!py-2.5 !my-0 rounded-tr-lg rounded-br-lg bg-gradient-to-r from-sky-600 via-sky-500 to-blue-600 text-white font-medium px-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-md hover:shadow-lg hover:shadow-sky-300/40"
                 >
                   Verify
                 </button>
               </div>
 
-              {errors.email && (
+              {frontErrors.email && (
                 <div className="text-xs text-red-500 font-medium !mt-1 place-self-start">
-                  {errors.email}
+                  {frontErrors.email}
                 </div>
               )}
 
@@ -192,7 +196,7 @@ function ForgotPassword() {
                 <button
                   type="submit"
                   onClick={handleVerifyOTP}
-                  disabled={!cont.otp || errors.otp}
+                  disabled={!cont.otp || frontErrors.otp}
                   className="btn !w-auto px-4 py-2.5 !mt-4"
                 >
                   Verify&nbsp;OTP

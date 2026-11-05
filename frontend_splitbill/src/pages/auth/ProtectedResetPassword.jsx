@@ -4,9 +4,16 @@ import api from "../../api/axios";
 import { Link } from "react-router-dom";
 import Navbar from "../../layout/Navbar";
 import { Outlet } from "react-router-dom";
+import getBackendError from "../../utils/getBackendError";
+import Error from "../error/Error";
 
 function ProtectedResetPassword() {
+  // loading
   const [loading, setLoading] = useState(true);
+
+  // error
+  const [backErrors, setBackErrors] = useState({});
+
   const [valid, setValid] = useState(false);
 
   useEffect(() => {
@@ -15,6 +22,7 @@ function ProtectedResetPassword() {
         const response = await api.get("/auth/verify-reset-token");
         setValid(true);
       } catch (error) {
+        setBackErrors(getBackendError(error));
         setValid(false);
       } finally {
         setLoading(false);
@@ -33,6 +41,11 @@ function ProtectedResetPassword() {
   ) : (
     <div>
       <Navbar />
+
+      {Object.keys(backErrors).length !== 0 && (
+        <Error errors={backErrors.error} type={backErrors.type} />
+      )}
+
       <div className="flex min-h-[70vh] flex-col items-center mt-8 px-6 text-center">
         <h1 className="text-xl font-medium tracking-tight text-slate-800">
           Oops! You've not verified email

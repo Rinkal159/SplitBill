@@ -4,6 +4,7 @@ import LabelAndInput from "./LabelAndInput";
 import api from "../../api/axios";
 import Error from "../error/Error";
 import { useNavigate } from "react-router-dom";
+import getBackendError from "../../utils/getBackendError";
 
 function ResetPassword() {
   const [passwords, setPasswords] = useState({
@@ -11,18 +12,20 @@ function ResetPassword() {
     confirm_password: "",
   });
 
-  const [errors, setErrors] = useState({
+  // loading
+  const [loading, setLoading] = useState(false);
+
+  // errors
+  const [frontErrors, setFrontErrors] = useState({
     new_password: "",
     confirm_password: "",
   });
-
-  const [pageErrors, setPageErrors] = useState([]);
-
-  const [loading, setLoading] = useState(false);
+  const [backErrors, setBackErrors] = useState({});
 
   const navigate = useNavigate();
 
   const handleChange = (e, field) => {
+    setBackErrors({});
     setPasswords((prevPasswords) => ({
       ...prevPasswords,
       [field]: e.target.value,
@@ -30,13 +33,14 @@ function ResetPassword() {
   };
 
   const handleErrorsChange = (field, message) => {
-    setErrors((prevErrors) => ({
+    setFrontErrors((prevErrors) => ({
       ...prevErrors,
       [field]: message,
     }));
   };
 
   const handleNewPasswordChange = (e) => {
+    setBackErrors({});
     const value = e.target.value;
 
     handleChange(e, "new_password");
@@ -54,6 +58,7 @@ function ResetPassword() {
   };
 
   const handleConfirmPasswordChange = (e) => {
+    setBackErrors({});
     const value = e.target.value;
 
     handleChange(e, "confirm_password");
@@ -76,15 +81,14 @@ function ResetPassword() {
     try {
       setLoading(true);
       
-      const response = await api.post("/auth/reset-password", {
+      await api.post("/auth/reset-password", {
         new_password: passwords.new_password,
       });
 
       return navigate("/login")
     } catch (error) {
       setLoading(false);
-
-      setPageErrors([error.response?.data.error]);
+      setBackErrors(getBackendError(error));
     }
   };
 
@@ -107,8 +111,8 @@ function ResetPassword() {
               className="w-full max-w-xs space-y-5 "
               onSubmit={handleSubmit}
             >
-              {Object.keys(pageErrors).length !== 0 && (
-                <Error errors={pageErrors.error} type={pageErrors.type} />
+              {Object.keys(backErrors).length !== 0 && (
+                <Error errors={backErrors.error} type={backErrors.type} />
               )}
 
               {/* New password */}
@@ -120,7 +124,7 @@ function ResetPassword() {
                 placeholder={""}
                 handleEvent={handleNewPasswordChange}
                 showError={true}
-                errors={errors}
+                errors={frontErrors}
                 required={true}
               />
 
@@ -133,7 +137,7 @@ function ResetPassword() {
                 placeholder={""}
                 handleEvent={handleConfirmPasswordChange}
                 showError={true}
-                errors={errors}
+                errors={frontErrors}
                 required={true}
               />
 

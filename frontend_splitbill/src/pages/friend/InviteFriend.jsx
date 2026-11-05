@@ -2,15 +2,22 @@ import React, { useState } from "react";
 import Error from "../error/Error";
 import LabelAndInput from "../auth/LabelAndInput";
 import api from "../../api/axios";
+import getBackendError from "../../utils/getBackendError";
 
 function InviteFriend({ onInvitationSent, onClose }) {
   const [label, setLabel] = useState("");
   const [input, setInput] = useState("");
-  const [errors, setErrors] = useState("");
-  const [pageErrors, setPageErrors] = useState([]);
+
+  // loading
   const [loading, setLoading] = useState(false);
 
+  // error
+  const [frontErrors, setFrontErrors] = useState("");
+  const [backErrors, setBackErrors] = useState({});
+
   const handleChange = (e) => {
+    setBackErrors({});
+
     const value = e.target.value;
     setInput(value);
 
@@ -21,39 +28,39 @@ function InviteFriend({ onInvitationSent, onClose }) {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
     if (!value) {
-      setErrors("");
+      setFrontErrors("");
       return;
     }
 
     if (/^\d/.test(value)) {
       if (!mobileRegex.test(value)) {
-        setErrors("Only digits are allowed in mobile number");
+        setFrontErrors("Only digits are allowed in mobile number");
       } else if (value.length !== 10) {
-        setErrors("Mobile number must be 10 digits");
+        setFrontErrors("Mobile number must be 10 digits");
       } else {
-        setErrors("");
+        setFrontErrors("");
       }
 
       return;
     }
 
     if (!emailRegex.test(value)) {
-      setErrors("Please enter a valid email");
+      setFrontErrors("Please enter a valid email");
     } else {
-      setErrors("");
+      setFrontErrors("");
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (errors || !input) return;
+    if (frontErrors || !input) return;
 
     try {
       setLoading(true);
-      setPageErrors([]);
+      setBackErrors({});
 
-      const response = await api.post("/friends/invite", {
+      await api.post("/friends/invite", {
         [label]: input,
       });
 
@@ -61,9 +68,8 @@ function InviteFriend({ onInvitationSent, onClose }) {
 
       // Close modal after successful invitation
       onClose();
-
     } catch (error) {
-      setPageErrors([error.response?.data?.error || "Something went wrong."]);
+      setBackErrors(getBackendError(error));
     } finally {
       setLoading(false);
     }
@@ -83,16 +89,14 @@ function InviteFriend({ onInvitationSent, onClose }) {
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-4 top-4 text-xl text-slate-400 transition hover:text-slate-700"
+          className="absolute right-4 top-4 text-xl text-slate-400 trans hover:text-slate-700"
         >
           ✕
         </button>
 
         {/* Heading */}
         <div className="mb-8 text-center">
-          <h2 className="text-xl heading-shadow">
-            Invite friend
-          </h2>
+          <h2 className="text-xl glittery-shadow">Invite friend</h2>
 
           <p className="mt-2 text-sm text-slate-400">
             Send an invitation using their email or mobile number.
@@ -103,21 +107,24 @@ function InviteFriend({ onInvitationSent, onClose }) {
           className="mx-auto w-full max-w-xs space-y-8"
           onSubmit={handleSubmit}
         >
-          {pageErrors.length !== 0 && <Error errors={pageErrors} />}
+          {Object.keys(backErrors).length !== 0 && (
+            <Error errors={backErrors.error} type={backErrors.type} />
+          )}
 
           <LabelAndInput
-            field="text"
-            labelValue="Email or Mobile number"
-            type="text"
+            field={"text"}
+            labelValue={"Email or Mobile number"}
+            type={"text"}
             person={input}
-            placeholder="Friend's email or mobile number"
+            placeholder={"Friend's email or mobile number"}
             handleEvent={handleChange}
             showError={true}
-            errors={errors}
+            errors={frontErrors}
+            required={true}
           />
 
           <button
-            disabled={loading || !input || !!errors}
+            disabled={loading || !input || !!frontErrors}
             className="btn w-full disabled:cursor-not-allowed disabled:opacity-50"
             type="submit"
           >
