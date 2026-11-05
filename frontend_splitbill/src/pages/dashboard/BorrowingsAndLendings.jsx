@@ -1,6 +1,6 @@
-import React from "react";
+import formatAmount from "../../utils/formatAmount";
 
-function BorrowingsAndLendings({dashboardData}) {
+function BorrowingsAndLendings({ dashboardData }) {
   return (
     <div>
       {/* balances */}
@@ -8,20 +8,24 @@ function BorrowingsAndLendings({dashboardData}) {
         <div className="flex items-end justify-around mt-2">
           <div className="flex flex-col items-center">
             <p className="text-sm text-blue-100 text-center">You borrowed</p>
-            <span className="text-xl">- ₹{dashboardData.total_borrowings}</span>
+            <span className="text-xl">
+              - ₹{formatAmount(dashboardData.total_borrowings)}
+            </span>
           </div>
 
           <div className="flex flex-col items-center">
             <p className="text-sm text-blue-100 text-center">Total balance</p>
             <h2 className="text-3xl font-semibold">
               {dashboardData.total_balance > 0 ? "+" : "-"}&nbsp;₹
-              {Math.abs(dashboardData.total_balance)}
+              {formatAmount(Math.abs(dashboardData.total_balance))}
             </h2>
           </div>
 
           <div className="flex flex-col items-center">
             <p className="text-sm text-blue-100 text-center">You lent</p>
-            <span className="text-xl">+ ₹{dashboardData.total_lendings}</span>
+            <span className="text-xl">
+              + ₹{formatAmount(dashboardData.total_lendings)}
+            </span>
           </div>
         </div>
       </div>
@@ -38,24 +42,25 @@ function BorrowingsAndLendings({dashboardData}) {
               <ul className="w-full">
                 {dashboardData.borrowings.map((borrow) => (
                   <li
-                    className="flex justify-center pb-4 pt-2 items-center px-8 hover:bg-gradient-to-br from-sky-100/70 via-white to-sky-100/70 hover:cursor-pointer"
+                    className="group mb-2 flex items-center justify-between gap-2 px-6 py-3 trans hover:-translate-y-0.5 hover:border-red-100 hover:cursor-pointer hover:shadow-md"
                     key={borrow.borrowed_from.id}
                   >
-                    <img
-                      className="small-img"
-                      src={borrow.borrowed_from.profile_picture_path}
-                      alt={borrow.borrowed_from.name}
-                    />
-
-                    <div className="flex flex-col ml-2">
-                      <p className="font-normal hover:cursor-pointer">
-                        {borrow.borrowed_from.name}
-                      </p>
-                      <p className="text-xs text-red-500">
-                        You borrowed{" "}
-                        <span className="font-medium">₹{borrow.amount}</span>
-                      </p>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <img
+                        className="h-11 w-11 shrink-0 rounded-full object-cover border-2 border-white shadow-md"
+                        src={borrow.borrowed_from.profile_picture_path}
+                        alt={borrow.borrowed_from.name}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-800 group-hover:glittery-shadow">
+                          {borrow.borrowed_from.name}
+                        </p>
+                        <p className="text-xs text-slate-500">You borrowed</p>
+                      </div>
                     </div>
+                    <span className="shrink-0 rounded-lg bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-600">
+                      ₹{formatAmount(borrow.amount)}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -75,20 +80,26 @@ function BorrowingsAndLendings({dashboardData}) {
             {dashboardData?.total_lendings > 0 && (
               <ul className="w-full">
                 {dashboardData.lendings.map((lend) => (
-                  <li className="flex justify-center pb-4 pt-2 items-center px-8 hover:bg-gradient-to-br from-sky-100/70 via-white to-sky-100/70 hover:cursor-pointer" key={lend.lent_to.id}>
-                    <img
-                      className="small-img"
-                      src={lend.lent_to.profile_picture_path}
-                      alt={lend.lent_to.name}
-                    />
-
-                    <div className="flex flex-col ml-2">
-                      <p className="font-normal hover:cursor-pointer">{lend.lent_to.name}</p>
-                      <p className="text-xs text-green-500">
-                        You lent{" "}
-                        <span className="font-medium">₹{lend.amount}</span>
-                      </p>
+                  <li
+                    className="group mb-2 flex items-center justify-between gap-2 px-6 py-3 trans hover:-translate-y-0.5 hover:border-red-100 hover:cursor-pointer hover:shadow-md "
+                    key={lend.lent_to.id}
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <img
+                        className="h-11 w-11 shrink-0 rounded-full object-cover border-2 border-white shadow-md"
+                        src={lend.lent_to.profile_picture_path}
+                        alt={lend.lent_to.name}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-800 group-hover:glittery-shadow">
+                          {lend.lent_to.name}
+                        </p>
+                        <p className="text-xs text-slate-500">You lent</p>
+                      </div>
                     </div>
+                    <span className="shrink-0 rounded-lg bg-green-50 px-3 py-1.5 text-sm font-semibold text-green-600">
+                      ₹{formatAmount(lend.amount)}
+                    </span>
                   </li>
                 ))}
               </ul>
