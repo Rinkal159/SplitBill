@@ -462,35 +462,7 @@ function AddExpense() {
                       ></textarea>
                     </div>
 
-                    {/* attachment and note */}
-                    <div className="flex w-full items-start gap-6 mt-2">
-                      {/* Attachment */}
-                      <div className="flex-1 space-y-2">
-                        <label htmlFor="attachment" className="form-lbl">
-                          Attachment
-                        </label>
-
-                        <input
-                          className="form-input w-full"
-                          type="file"
-                          accept="image/*"
-                          id="attachment"
-                        />
-                      </div>
-
-                      {/* Note */}
-                      <div className="flex-1">
-                        <LabelAndInput
-                          field="note"
-                          labelValue="Note"
-                          handleEvent={(e) => handleChange(e, "note")}
-                          person={expense}
-                          type="text"
-                          placeholder="Enter a note"
-                        />
-                      </div>
-                    </div>
-
+                    {/* amount and expense date */}
                     <div className="flex w-full items-start gap-6 mt-2">
                       {/* Amount */}
                       <div className="flex-1">
@@ -520,6 +492,35 @@ function AddExpense() {
                           value={expense.expense_date}
                           onChange={(e) => handleChange(e, "expense_date")}
                           required
+                        />
+                      </div>
+                    </div>
+
+                    {/* attachment and note */}
+                    <div className="flex w-full items-start gap-6 mt-2">
+                      {/* Attachment */}
+                      <div className="flex-1 space-y-2">
+                        <label htmlFor="attachment" className="form-lbl">
+                          Attachment
+                        </label>
+
+                        <input
+                          className="form-input w-full"
+                          type="file"
+                          accept="image/*"
+                          id="attachment"
+                        />
+                      </div>
+
+                      {/* Note */}
+                      <div className="flex-1">
+                        <LabelAndInput
+                          field="note"
+                          labelValue="Note"
+                          handleEvent={(e) => handleChange(e, "note")}
+                          person={expense}
+                          type="text"
+                          placeholder="Enter a note"
                         />
                       </div>
                     </div>
