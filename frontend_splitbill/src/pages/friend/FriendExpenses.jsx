@@ -72,43 +72,51 @@ function FriendExpenses({ friend }) {
     return <Error errors={backErrors?.error} type={backErrors?.type} />;
   }
 
+  const balance =
+    activeFilter === "group expenses"
+      ? (expenses.group_balance ?? 0)
+      : activeFilter === "individual expenses"
+        ? (expenses.individual_balance ?? 0)
+        : (expenses.total_balance ?? 0);
+
   return (
     <div className="p-6">
       {/* name, how much borrowed/lent and settle up */}
-      <header className="flex justify-between items-center pb-6">
-        <div className="flex flex-col items-start">
-          <div className="flex gap-2 items-center pb-1 hover:cursor-pointer group">
+      <header className="flex justify-between items-center mb-6 border-2 border-white p-2 shadow-md bg-sky-50/60 rounded-full">
+        <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center hover:cursor-pointer group">
             <img
-              className="small-img group-hover:scale-105"
+              className="!h-14 !w-14 object-cover group-hover:scale-105 border-2 border-white rounded-full"
               src={friend.profile_picture_path}
               alt={friend.name}
             />
-            <h1 className="heading glittery-shadow pb-0 pt-0 group-hover:underline">
+          </div>
+          <div className="flex flex-col items-start">
+            <h1 className="heading glittery-shadow pb-0 pt-0  group-hover:underline">
               {friend.name}
             </h1>
-          </div>
-          {expenses.total_balance == 0
-            ? expenses.settlements.length > 0 && (
-                <p>
+            {expenses.settlements.length > 0 &&
+              (Number(balance) === 0 ? (
+                <p className="text-sm">
                   You are <span className="accept-text">settled</span>
                 </p>
-              )
-            : expenses.settlements.length > 0 && (
-                <p className="text-slate-600">
+              ) : (
+                <p className="text-slate-600 text-sm">
                   You{" "}
                   <span className="font-medium">
-                    {expenses.total_balance < 0 ? "borrowed" : "lent"}
+                    {balance < 0 ? "borrowed" : "lent"}
                   </span>{" "}
                   <span
-                    className={`${expenses.total_balance < 0 ? "reject-text" : "accept-text"}`}
+                    className={`${balance < 0 ? "reject-text" : "accept-text"}`}
                   >
-                    ₹{formatAmount(Math.abs(expenses.total_balance))}
+                    ₹{formatAmount(Math.abs(balance))}
                   </span>
                 </p>
-              )}
+              ))}
+          </div>
         </div>
-        {expenses.total_balance < 0 && (
-          <button className="invitation-btn settle-up-text settle-up-bg py-2 px-4">
+        {balance < 0 && (
+          <button className="invitation-btn edit-text edit-btn-shadow py-2 px-4 mx-2">
             Settle up
           </button>
         )}
@@ -329,13 +337,18 @@ function FriendExpenses({ friend }) {
                                     {your.to_user.name}
                                   </span>
                                 </li>
-                                {your.amount < 0 &&
-                                  expenses.friend_balances[your.to_user.id] <
-                                    0 && (
-                                    <button className="invitation-btn accept-text accept-btn-shadow">
-                                      Settle up individually
-                                    </button>
-                                  )}
+                                {your.amount < 0 && activeFilter === "all"
+                                  ? expenses.friend_balances[your.to_user.id] <
+                                      0 && (
+                                      <button className="invitation-btn accept-text accept-btn-shadow">
+                                        Settle up individually
+                                      </button>
+                                    )
+                                  : your.amount < 0 && (
+                                      <button className="invitation-btn accept-text accept-btn-shadow">
+                                        Settle up individually
+                                      </button>
+                                    )}
                               </div>
                             </div>
                           ))}
@@ -391,18 +404,26 @@ function FriendExpenses({ friend }) {
                           </button>
                         )}
 
-                        {expense.your_balance < 0 &&
-                          expense.your_settlements.every(
-                            (your) =>
-                              expenses.friend_balances[your.to_user.id] < 0,
-                          ) && (
-                            <button
-                              onClick={(e) => e.stopPropagation()}
-                              className="invitation-btn accept-text accept-btn-shadow"
-                            >
-                              Settle up
-                            </button>
-                          )}
+                        {balance_with_friend < 0 && activeFilter === "all"
+                          ? expense.your_settlements.every(
+                              (your) =>
+                                expenses.friend_balances[your.to_user.id] < 0,
+                            ) && (
+                              <button
+                                onClick={(e) => e.stopPropagation()}
+                                className="invitation-btn accept-text accept-btn-shadow"
+                              >
+                                Settle up
+                              </button>
+                            )
+                          : balance_with_friend < 0 && (
+                              <button
+                                onClick={(e) => e.stopPropagation()}
+                                className="invitation-btn accept-text accept-btn-shadow"
+                              >
+                                Settle up
+                              </button>
+                            )}
 
                         {user.id == expense.expense.created_by && (
                           <button
