@@ -59,10 +59,7 @@ function ForgotPassword() {
       });
       return response;
     } catch (error) {
-      setBackErrors({
-        type: error.response?.status,
-        error: [error.response?.data.error],
-      });
+      setBackErrors(getBackendError(error));
     }
   };
 
