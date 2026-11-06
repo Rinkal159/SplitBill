@@ -5,6 +5,8 @@ import { AuthContext } from "../../context/AuthProvider";
 import Filter from "../group/Filter";
 import Loading from "../loading/Loading";
 import formatAmount from "../../utils/formatAmount";
+import getBackendError from "../../utils/getBackendError";
+import Error from "../error/Error";
 
 function FriendExpenses({ friend }) {
   const { user } = useContext(AuthContext);
@@ -13,6 +15,9 @@ function FriendExpenses({ friend }) {
 
   // loading
   const [loading, setLoading] = useState(true);
+
+  // error
+  const [backErrors, setBackErrors] = useState({});
 
   const filters = ["all", "group expenses", "individual expenses"];
   const [activeFilter, setActiveFilter] = useState("all");
@@ -24,10 +29,13 @@ function FriendExpenses({ friend }) {
       setExpenses(response.data);
       setLoading(false);
     } catch (error) {
-      setLoading(true);
-      setError(error);
+      setBackErrors(getBackendError(error));
+    } finally {
+      setLoading(false);
     }
   };
+
+  console.log("BACK ERROR: ", backErrors);
 
   // run getExpenses whenever user clicks on any friend, which means when friend.id changes, this function runs
   useEffect(() => {
@@ -58,6 +66,10 @@ function FriendExpenses({ friend }) {
 
   if (loading) {
     return <Loading msg={friend.name} />;
+  }
+
+  if (Object.keys(backErrors).length !== 0) {
+    return <Error errors={backErrors?.error} type={backErrors?.type} />;
   }
 
   return (
@@ -96,7 +108,7 @@ function FriendExpenses({ friend }) {
               )}
         </div>
         {expenses.total_balance < 0 && (
-          <button className="invitation-btn edit-text edit-btn-shadow py-2 px-4">
+          <button className="invitation-btn settle-up-text settle-up-bg py-2 px-4">
             Settle up
           </button>
         )}
@@ -320,7 +332,7 @@ function FriendExpenses({ friend }) {
                                 {your.amount < 0 &&
                                   expenses.friend_balances[your.to_user.id] <
                                     0 && (
-                                    <button className="invitation-btn accept-text accpet-btn-shadow">
+                                    <button className="invitation-btn accept-text accept-btn-shadow">
                                       Settle up individually
                                     </button>
                                   )}
@@ -386,7 +398,7 @@ function FriendExpenses({ friend }) {
                           ) && (
                             <button
                               onClick={(e) => e.stopPropagation()}
-                              className="invitation-btn accept-text accpet-btn-shadow"
+                              className="invitation-btn accept-text accept-btn-shadow"
                             >
                               Settle up
                             </button>
