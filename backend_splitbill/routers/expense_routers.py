@@ -279,6 +279,26 @@ async def get_all_borrowing_and_lendings_api(
     }
 
 
+# * get all the people from you borrowed with borrowed money
+@expense_router.get("/borrowings")
+async def get_borrowings_api(
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
+):
+    # get all expenses in which you're involved
+    result = await db.execute(
+        select(ExpenseSplits.expense_id)
+        .where(ExpenseSplits.user_id == current_user.id)
+        .order_by(ExpenseSplits.expense_id)
+    )
+    expense_ids = result.scalars().all()
+
+    expense_groups = await get_expense_groups(
+        expense_ids=expense_ids, db=db, newest_first=True
+    )
+
+    general_balance = []
+
+
 # * get single expense
 @expense_router.get("/{expense_id}", response_model=SingleExpenseResponseSchema)
 async def get_single_expense(
@@ -311,8 +331,10 @@ async def get_single_expense(
         )
 
     # get settlements for this expense
-    expenses, friend_balances, total_balance_with_friend, total_balance = await get_all_expenses_in_which_user_involved(
-        expense_ids=[expense_id], db=db, current_user=current_user
+    expenses, friend_balances, total_balance_with_friend, total_balance = (
+        await get_all_expenses_in_which_user_involved(
+            expense_ids=[expense_id], db=db, current_user=current_user
+        )
     )
 
     return {"expenses": expenses}
@@ -359,7 +381,7 @@ async def get_all_expenses_api(
     return {
         "expenses": expenses,
         "friend_balances": friend_balances,
-        "total_balance":total_balance,
+        "total_balance": total_balance,
         "page": page,
         "skip": skip,
         "limit": limit,
@@ -424,14 +446,16 @@ async def get_all_group_expenses_api(
     )
     expense_ids = result.scalars().all()
 
-    expenses, friend_balances, total_balance_with_friend, total_balance = await get_all_expenses_in_which_user_involved(
-        expense_ids=expense_ids, db=db, current_user=current_user
+    expenses, friend_balances, total_balance_with_friend, total_balance = (
+        await get_all_expenses_in_which_user_involved(
+            expense_ids=expense_ids, db=db, current_user=current_user
+        )
     )
 
     return {
         "expenses": expenses,
         "friend_balances": friend_balances,
-        "total_balance" : total_balance,
+        "total_balance": total_balance,
         "page": page,
         "skip": skip,
         "limit": limit,
