@@ -119,7 +119,10 @@ class BorrowingsAndLendings(Base):
 
 
 # * FriendsSettlements
-class FriendExpenseSchema(ExpenseSchema):
+class FriendExpenseSchema(Base):
+    expense: ExpenseDetail
+    your_settlements: list[YourSettlementSchema]
+    other_settlements: list[SettlementSchema]
     your_expensewise_balance_with_friend: Decimal
 
 
@@ -128,6 +131,8 @@ class FriendsSettlementsResponse(Base):
     settlements: list[FriendExpenseSchema]
     friend_balances: dict
     total_balance: Decimal
+    group_balance: Decimal
+    individual_balance: Decimal
 
 
 # * TotalBalanceWithFriend
