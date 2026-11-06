@@ -1,6 +1,6 @@
 import formatAmount from "../../utils/formatAmount";
 
-function BorrowingsAndLendings({ dashboardData }) {
+function BorrowingsAndLendings({ dashboardData, onUserClick }) {
   return (
     <div>
       {/* balances */}
@@ -42,6 +42,7 @@ function BorrowingsAndLendings({ dashboardData }) {
               <ul className="w-full">
                 {dashboardData.borrowings.map((borrow) => (
                   <li
+                  onClick={() => onUserClick(borrow.borrowed_from)}
                     className="group mb-2 flex items-center justify-between gap-2 px-6 py-3 trans hover:-translate-y-0.5 hover:border-red-100 hover:cursor-pointer hover:shadow-md"
                     key={borrow.borrowed_from.id}
                   >
@@ -81,6 +82,7 @@ function BorrowingsAndLendings({ dashboardData }) {
               <ul className="w-full">
                 {dashboardData.lendings.map((lend) => (
                   <li
+                  onClick={() => onUserClick(lend.lent_to)}
                     className="group mb-2 flex items-center justify-between gap-2 px-6 py-3 trans hover:-translate-y-0.5 hover:border-red-100 hover:cursor-pointer hover:shadow-md "
                     key={lend.lent_to.id}
                   >
