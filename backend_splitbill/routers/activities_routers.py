@@ -266,9 +266,7 @@ async def get_activities_api(
     )
 
     settlement_query = select(
-        literal(
-            "SETTLEMENT"
-        ).label("type"),
+        literal("SETTLEMENT").label("type"),
         Settlement.group_id.label("group_id"),
         case(
             (Settlement.from_user == current_user.id, literal("PAID")),
