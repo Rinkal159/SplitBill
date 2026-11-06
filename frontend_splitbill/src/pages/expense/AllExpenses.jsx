@@ -236,7 +236,7 @@ export default function AllExpenses() {
                             </li>
                             {your.amount < 0 &&
                               expenses.friend_balances[your.to_user.id] < 0 && (
-                                <button className="invitation-btn accept-text accpet-btn-shadow">
+                                <button className="invitation-btn accept-text accept-btn-shadow">
                                   Settle up individually
                                 </button>
                               )}
@@ -301,7 +301,7 @@ export default function AllExpenses() {
                       ) && (
                         <button
                           onClick={(e) => e.stopPropagation()}
-                          className="invitation-btn accept-text accpet-btn-shadow"
+                          className="invitation-btn accept-text accept-btn-shadow"
                         >
                           Settle up
                         </button>

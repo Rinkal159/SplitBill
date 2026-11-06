@@ -58,7 +58,7 @@
         @apply border border-blue-400 hover:bg-gradient-to-r from-sky-500 via-sky-400 to-blue-500 hover:bg-clip-border hover:text-white
     }
 
-    .accpet-btn-shadow {
+    .accept-btn-shadow {
         @apply border border-green-500 hover:bg-gradient-to-r hover:from-green-500 hover:via-green-400 hover:to-green-600 hover:bg-clip-border hover:text-white
     }
 

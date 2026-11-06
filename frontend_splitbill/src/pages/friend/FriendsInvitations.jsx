@@ -130,7 +130,7 @@ export default function FriendsInvitations({
                     <div className="flex gap-2">
                       <InvitationActionButton
                         value={"Accept"}
-                        btnClass={"accept-text accpet-btn-shadow"}
+                        btnClass={"accept-text accept-btn-shadow"}
                         onClick={() =>
                           handleInvitationActionButtonClick(
                             invite.id,
