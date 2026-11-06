@@ -33,7 +33,7 @@ export default function Error({ errors = [], type }) {
       role="alert"
       aria-live="assertive"
       data-error-type={type}
-      className="text-red-500 font-medium text-center bg-rose-100 py-2 px-4 flex justify-center items-center relative"
+      className="text-red-500 rounded-t-2xl font-medium text-center bg-rose-100 py-2 px-4 flex justify-center items-center relative"
     >
       <ul className="space-y-1">
         {errorList.map((error, index) => (
@@ -43,14 +43,14 @@ export default function Error({ errors = [], type }) {
         ))}
       </ul>
 
-      <button
+      {/* <button
         type="button"
         onClick={() => setVisible(false)}
         aria-label="Dismiss error message"
         className="absolute right-4 cursor-pointer border-0 bg-transparent p-0 text-rose-600 transition hover:text-rose-700"
       >
         <i className="fa-solid fa-xmark" aria-hidden="true" />
-      </button>
+      </button> */}
     </div>
   );
 }
