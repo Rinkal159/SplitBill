@@ -60,60 +60,59 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
   return (
     <div className="p-6">
       {/* name, how much borrowed/lent and settle up */}
-      <header className="grid grid-cols-[2fr_1fr] pb-6">
-        <div className="flex flex-col items-start justify-center">
-          <div className="flex gap-2 items-center pb-1 hover:cursor-pointer group">
+      <header className="flex justify-between items-center mb-6 border-2 border-white p-2 shadow-md bg-sky-50/60 rounded-full">
+        <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center hover:cursor-pointer group">
             <img
-              className="small-img group-hover:scale-105"
+              className="!h-14 !w-14 object-cover group-hover:scale-105 border-2 border-white rounded-full"
               src={group.group_picture_path}
               alt={group.name}
             />
+          </div>
+          <div className="flex flex-col items-start group">
             <h1
               onClick={() => setShowGroupDetailsModal(true)}
-              className="heading glittery-shadow pb-0 pt-0 group-hover:underline"
+              className="heading glittery-shadow pb-0 pt-0 group-hover:underline group-hover:cursor-pointer"
             >
               {group.name}
             </h1>
+            {expenses.total_balance == 0
+              ? expenses.expenses.length > 0 && (
+                  <p>
+                    You are <span className="accept-text">settled</span>
+                  </p>
+                )
+              : expenses.expenses.length > 0 && (
+                  <p className="text-slate-600">
+                    You{" "}
+                    <span className="font-medium">
+                      {expenses.total_balance < 0 ? "borrowed" : "lent"}
+                    </span>{" "}
+                    <span
+                      className={`${expenses.total_balance < 0 ? "reject-text" : "accept-text"}`}
+                    >
+                      ₹{formatAmount(Math.abs(expenses.total_balance))}
+                    </span>
+                  </p>
+                )}
           </div>
-
-          {expenses.total_balance == 0
-            ? expenses.expenses.length > 0 && (
-                <p>
-                  You are <span className="accept-text">settled</span>
-                </p>
-              )
-            : expenses.expenses.length > 0 && (
-                <p className="text-slate-600">
-                  You{" "}
-                  <span className="font-medium">
-                    {expenses.total_balance < 0 ? "borrowed" : "lent"}
-                  </span>{" "}
-                  <span
-                    className={`${expenses.total_balance < 0 ? "reject-text" : "accept-text"}`}
-                  >
-                    ₹{formatAmount(Math.abs(expenses.total_balance))}
-                  </span>
-                </p>
-              )}
         </div>
+        {isAdmin && (
+          <button
+            onClick={() => setShowEditGroupModal(true)}
+            className="invitation-btn edit-text edit-btn-shadow py-2 px-4 mx-2"
+          >
+            Edit <i class="fa-solid fa-pen-to-square"></i>
+          </button>
+        )}
 
-        <div className="flex gap-2 items-center justify-end">
-          {isAdmin && (
-            <button
-              onClick={() => setShowEditGroupModal(true)}
-              className="invitation-btn edit-text edit-btn-shadow"
-            >
-              Edit <i class="fa-solid fa-pen-to-square"></i>
-            </button>
-          )}
-
-          {expenses.total_balance < 0 && (
-            <button className="invitation-btn edit-text edit-btn-shadow">
-              Settle up
-            </button>
-          )}
-        </div>
+        {expenses.total_balance < 0 && (
+          <button className="invitation-btn edit-text edit-btn-shadow py-2 px-4 mx-2">
+            Settle up
+          </button>
+        )}
       </header>
+
 
       {/* expenses */}
       <div className="space-y-3">
@@ -315,7 +314,7 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
                               {your.amount < 0 &&
                                 expenses.friend_balances[your.to_user.id] <
                                   0 && (
-                                  <button className="invitation-btn accept-text accpet-btn-shadow">
+                                  <button className="invitation-btn accept-text accept-btn-shadow">
                                     Settle up individually
                                   </button>
                                 )}
@@ -381,7 +380,7 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
                         ) && (
                           <button
                             onClick={(e) => e.stopPropagation()}
-                            className="invitation-btn accept-text accpet-btn-shadow"
+                            className="invitation-btn accept-text accept-btn-shadow"
                           >
                             Settle up
                           </button>
