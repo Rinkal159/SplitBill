@@ -199,7 +199,12 @@ function Dashboard() {
   const renderContent = () => {
     switch (contentRenderer) {
       case "Dashboard":
-        return <BorrowingsAndLendings dashboardData={dashboardData} />;
+        return (
+          <BorrowingsAndLendings
+            dashboardData={dashboardData}
+            onUserClick={onFriendClickEvent}
+          />
+        );
       case "Activities":
         return <Activities setBackErrors={setBackErrors} />;
       case "FriendInvitations":
