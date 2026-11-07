@@ -12,6 +12,7 @@ export default function SelectMenu({
   closeMenuOnSelect,
   isCreatable = false,
   onCreateOption,
+  formatOptionLabel,
   additionalInfo = "",
   required = true
 }) {
@@ -31,8 +32,8 @@ export default function SelectMenu({
 
     valueContainer: (base) => ({
       ...base,
-      padding: "4px 10px",
-      gap: "4px",
+      padding: "0px 10px",
+      gap: "2px",
     }),
 
     placeholder: (base) => ({
@@ -90,7 +91,7 @@ export default function SelectMenu({
     option: (base, state) => ({
       ...base,
       borderRadius: "7px",
-      padding: "9px 10px",
+      padding: "4px 10px",
       fontSize: "14px",
       color: state.isSelected ? "#2563eb" : "#334155",
       backgroundColor: state.isSelected
@@ -172,6 +173,7 @@ export default function SelectMenu({
         id={field}
         isMulti={isMultiSelect}
         options={options}
+        formatOptionLabel={formatOptionLabel}
         value={value}
         onChange={handleChange}
         isSearchable
