@@ -397,6 +397,13 @@ class ExpenseSplits(Base):
     )
 
 
+class SettlementStatus(str, Enum):
+    PENDING = "PENDING"
+    CONFIRMED = "CONFIRMED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+
+
 # Settlemet and SettlementHistory
 class Settlement(Base):
     __tablename__ = "settlements"
@@ -414,10 +421,18 @@ class Settlement(Base):
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     payment_method: Mapped[str] = mapped_column(String(30), default="CASH")
+    status: Mapped["SettlementStatus"] = mapped_column(
+        SQLAlchemyEnum(SettlementStatus),
+        default=SettlementStatus.PENDING,
+        nullable=False,
+    )
     note: Mapped[str] = mapped_column(String(1500), nullable=True)
     settlement_date: Mapped[date] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+    responded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     # if user is setting up expensewise, then for which expense
