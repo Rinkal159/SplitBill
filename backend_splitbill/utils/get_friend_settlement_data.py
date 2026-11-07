@@ -146,6 +146,7 @@ async def get_friend_settlement_data(
         settlements.append(
             {
                 "expense": expense,
+                "splits" : splits,
                 "your_settlements": your_logs,
                 "other_settlements": other_logs,
                 "your_expensewise_balance_with_friend": expensewise_balance
