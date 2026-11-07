@@ -12,8 +12,8 @@ class UserDetail(Base):
     id: int
     name: str
     profile_picture_path: str
-    
-    
+
+
 class GroupDetail(Base):
     id: int
     name: str

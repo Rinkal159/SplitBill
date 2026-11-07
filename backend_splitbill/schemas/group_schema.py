@@ -68,15 +68,22 @@ class GroupDetail(Base):
     creator: UserDetail
 
 
+# * GroupDebt
+class GroupDebt(Base):
+    group: GroupDetail
+    debt_amount: Decimal
+
+
 class InvitationResponse(Base):
     id: int
     group: GroupDetail
     updated_at: datetime
-    
-    
+
+
 class ReceivedInvitationResponse(InvitationResponse):
     inviter: UserDetail
-    
+
+
 class SentInvitationRespose(InvitationResponse):
     invitee: UserDetail | None
     invitee_email: EmailStr | None
@@ -106,7 +113,7 @@ class GroupDetailWithMembers(GroupDetail):
 
 class GroupResponse(Base):
     group: GroupDetailWithMembers
-    
+
 
 # * GroupNameResponse
 class GroupNameResponse(Base):
@@ -137,16 +144,14 @@ class ExpenseWithSpecificMemberResponse(Base):
     member: UserDetail
     settlements: list[SettlementsWithMember]
     total_balance: Decimal
-    
-    
-    
+
+
 # * GroupsSentInvitations
 class InviteeDetails(Base):
     invitee: UserDetail | None
     invitee_email: EmailStr | None
     invitee_mobile_number: str | None
-    
-    
+
+
 class GroupsSentInvitations(Base):
     invitees: list[InviteeDetails]
-    
