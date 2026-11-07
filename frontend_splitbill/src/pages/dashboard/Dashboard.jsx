@@ -24,6 +24,8 @@ function Dashboard() {
   const [friends, setFriends] = useState([]);
   const [groups, setGroups] = useState([]);
   const invitations = ["Friend invitations", "Group invitations"];
+  const settlements = ["Cash Settlement Requests", "Settlement History"];
+
   const [showFriendInviteModal, setShowFriendInviteModal] = useState(false);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
 
@@ -53,6 +55,7 @@ function Dashboard() {
     "Friends",
     "Groups",
     "Invitations",
+    "Settlements"
   ];
 
   const getDashboardData = async () => {
@@ -285,7 +288,7 @@ function Dashboard() {
                       ? groups
                       : title == "Invitations"
                         ? invitations
-                        : []
+                        : title == "Settlements" ? settlements : []
                 }
                 isLoading={
                   title == "Friends"
