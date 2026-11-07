@@ -122,8 +122,6 @@ function Activities({setBackErrors}) {
     setActiveFilter(filter);
     setFilterClicked(true);
     const newActivities = getFilteredActivities(value);
-    console.log(newActivities);
-
     setFilteredActivities(newActivities);
   };
 
