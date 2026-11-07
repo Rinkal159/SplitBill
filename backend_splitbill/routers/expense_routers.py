@@ -41,6 +41,7 @@ from backend_splitbill.schemas.expense_schema import (
     UserDetail as UserDetailSchema,
     TotalBalanceWithFriend as TotalBalanceWithFriendSchema,
 )
+from backend_splitbill.schemas.group_schema import GroupDebt as GroupDebtSchema
 from backend_splitbill.model import (
     Friends,
     User,
@@ -389,9 +390,9 @@ async def get_all_expenses_api(
     }
 
 
-# * get all group expenses - All group expenses - PAGINATED
+# * get all expenses of the group - All group expenses - PAGINATED
 @expense_router.get(
-    "/groups/{group_id}", response_model=PaginatedExpensesResponseSchema
+    "/groups/{group_id:int}", response_model=PaginatedExpensesResponseSchema
 )
 async def get_all_group_expenses_api(
     group_id: int,
@@ -461,6 +462,43 @@ async def get_all_group_expenses_api(
         "limit": limit,
         "has_more": skip + len(expenses) < total_count,
     }
+
+
+# # * get groups in which user is in debt
+@expense_router.get("/groups/debt", response_model=list[GroupDebtSchema])
+async def get_debt_groups_api(
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
+):
+    # groups in which you're a member
+    result = await db.execute(
+        select(Group)
+        .join(GroupMember, GroupMember.group_id == Group.id)
+        .where(
+            GroupMember.user_id == current_user.id,
+            Group.is_deleted.is_(False),
+        )
+        .order_by(Group.name)
+    )
+    groups = result.scalars().unique().all()
+    debt_groups = []
+
+    for group in groups:
+        result = await db.execute(
+            select(Expense.id).where(Expense.group_id == group.id)
+        )
+        expense_ids = result.scalars().all()
+        if not expense_ids:
+            continue
+
+        _, _, _, total_balance = await get_all_expenses_in_which_user_involved(
+            expense_ids=expense_ids,
+            db=db,
+            current_user=current_user,
+        )
+        if total_balance < Decimal("0"):
+            debt_groups.append({"group": group, "debt_amount": abs(total_balance)})
+
+    return debt_groups
 
 
 # * get all expenses in which you and your friend is involved - Friends
