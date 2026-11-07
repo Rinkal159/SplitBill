@@ -7,6 +7,7 @@ import Loading from "../loading/Loading";
 import formatAmount from "../../utils/formatAmount";
 import getBackendError from "../../utils/getBackendError";
 import Error from "../error/Error";
+import Settlement from "../settlement/Settlement";
 
 function FriendExpenses({ friend }) {
   const { user } = useContext(AuthContext);
@@ -23,6 +24,9 @@ function FriendExpenses({ friend }) {
   const [activeFilter, setActiveFilter] = useState("all");
   const [filteredExpenses, setFilteredExpenses] = useState([]);
 
+  // settle up
+  const [showSettlementModal, setShowSettlementModal] = useState(false);
+
   const getExpenses = async () => {
     try {
       const response = await api.get(`expenses/friends/${friend.id}`);
@@ -34,8 +38,6 @@ function FriendExpenses({ friend }) {
       setLoading(false);
     }
   };
-
-  console.log("BACK ERROR: ", backErrors);
 
   // run getExpenses whenever user clicks on any friend, which means when friend.id changes, this function runs
   useEffect(() => {
@@ -116,7 +118,10 @@ function FriendExpenses({ friend }) {
           </div>
         </div>
         {balance < 0 && (
-          <button className="invitation-btn edit-text edit-btn-shadow py-2 px-4 mx-2">
+          <button
+            onClick={() => setShowSettlementModal(true)}
+            className="invitation-btn edit-text edit-btn-shadow py-2 px-4 mx-2"
+          >
             Settle up
           </button>
         )}
@@ -447,6 +452,14 @@ function FriendExpenses({ friend }) {
           </div>
         )}
       </div>
+
+      {showSettlementModal && (
+        <Settlement
+          onClose={() => setShowSettlementModal(false)}
+          toUser={friend}
+          settlementValue={formatAmount(Math.abs(balance))}
+        />
+      )}
     </div>
   );
 }
