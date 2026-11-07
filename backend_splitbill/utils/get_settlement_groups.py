@@ -1,5 +1,5 @@
 from sqlalchemy import select
-from backend_splitbill.model import SettlementSplits
+from backend_splitbill.model import Settlement, SettlementSplits, SettlementStatus
 from collections import defaultdict
 from sqlalchemy.orm import selectinload
 
@@ -12,7 +12,13 @@ async def get_settlement_groups(splits, db):
     result = await db.execute(
         select(SettlementSplits)
         .options(selectinload(SettlementSplits.settlement))
-        .where(SettlementSplits.split_id.in_(split_ids))
+        .join(Settlement, SettlementSplits.settlement_id == Settlement.id)
+        .where(
+            SettlementSplits.split_id.in_(split_ids),
+            Settlement.status.in_(
+                [SettlementStatus.PENDING, SettlementStatus.CONFIRMED]
+            ),
+        )
     )
     all_settlement_splits = result.scalars().all()
 
