@@ -27,12 +27,83 @@ from backend_splitbill.model import (
     SettlementStatus,
 )
 from backend_splitbill.schemas.settlement_schema import (
+    GroupSettlementCreate as GroupSettlementCreateSchema,
     SettlementCreate as SettlementCreateSchema,
     SettlementRequestResponse as SettlementRequestResponseSchema,
     SettlementResponse as SettlementResponseSchema,
 )
 
 settlements_router = APIRouter(prefix="/api/settlements", tags=["Settlements"])
+
+
+@settlements_router.post(
+    "/groups",
+    response_model=list[SettlementRequestResponseSchema],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_group_settlement_requests(
+    payload: GroupSettlementCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    user_ids = [item.to_user for item in payload.settlements]
+    if current_user.id in user_ids or len(set(user_ids)) != len(user_ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Choose each other group member once",
+        )
+
+    created = []
+    try:
+        for item in payload.settlements:
+            available_debt, _ = await _get_request_scope_debt(
+                from_user=current_user,
+                to_user_id=item.to_user,
+                expense_id=None,
+                group_id=payload.group_id,
+                db=db,
+            )
+            if available_debt <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"You do not owe user {item.to_user} in this group",
+                )
+            if item.amount > available_debt:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Settlement amount for user {item.to_user} exceeds the remaining debt",
+                )
+
+            settlement = Settlement(
+                group_id=payload.group_id,
+                from_user=current_user.id,
+                to_user=item.to_user,
+                amount=item.amount,
+                payment_method=payload.payment_method,
+                note=payload.note,
+                settlement_date=payload.settlement_date,
+                status=SettlementStatus.PENDING,
+            )
+            settlement.payer = current_user
+            db.add(settlement)
+            await db.flush()
+            expense_groups = await _get_split_groups_for_settlement(settlement, db)
+            created_splits, _ = await _allocate_settlement_splits(
+                settlement, expense_groups, db
+            )
+            if not created_splits:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="No outstanding debt was found for a selected member",
+                )
+            created.append(settlement)
+
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    return [await _get_settlement(item.id, db) for item in created]
 
 
 def _settlement_query():
@@ -162,18 +233,31 @@ async def _get_split_groups_for_settlement(settlement: Settlement, db: AsyncSess
             db=db,
             current_user=payer,
         )
-        return [
-            item["splits"] for item in data["settlements"] if item["net_balance"] < 0
-        ]
+        # Apply payments to the oldest outstanding expense first (FIFO).
+        return list(
+            reversed(
+                [
+                    item["splits"]
+                    for item in data["settlements"]
+                    if item["net_balance"] < 0
+                ]
+            )
+        )
 
     data = await get_friend_settlement_data(
         friend_id=settlement.to_user, db=db, current_user=payer
     )
-    return [
-        item["splits"]
-        for item in data["settlements"]
-        if item["your_expensewise_balance_with_friend"] < 0
-    ]
+    # Overall payments can cover both individual and group expenses. Allocate
+    # them oldest-first so creation time breaks ties on the same expense date.
+    return list(
+        reversed(
+            [
+                item["splits"]
+                for item in data["settlements"]
+                if item["your_expensewise_balance_with_friend"] < 0
+            ]
+        )
+    )
 
 
 async def _allocate_settlement_splits(
@@ -313,7 +397,7 @@ async def create_settlement_request(
     return await _get_settlement(new_settlement.id, db)
 
 
-# * get sent settlement requests
+# * get sent pending settlement requests
 @settlements_router.get(
     "/requests/sent", response_model=list[SettlementRequestResponseSchema]
 )
@@ -322,13 +406,16 @@ async def get_sent_settlement_requests(
 ):
     result = await db.execute(
         _settlement_query()
-        .where(Settlement.from_user == current_user.id)
+        .where(
+            Settlement.from_user == current_user.id,
+            Settlement.status == SettlementStatus.PENDING,
+        )
         .order_by(Settlement.created_at.desc(), Settlement.id.desc())
     )
     return result.scalars().all()
 
 
-# * get received settlement request
+# * get received pending settlement request
 @settlements_router.get(
     "/requests/received", response_model=list[SettlementRequestResponseSchema]
 )
@@ -337,7 +424,10 @@ async def get_received_settlement_requests(
 ):
     result = await db.execute(
         _settlement_query()
-        .where(Settlement.to_user == current_user.id)
+        .where(
+            Settlement.to_user == current_user.id,
+            Settlement.status == SettlementStatus.PENDING,
+        )
         .order_by(Settlement.created_at.desc(), Settlement.id.desc())
     )
     return result.scalars().all()
@@ -513,9 +603,7 @@ async def _accept_settlement_request(
 
 
 # * settlement
-@settlements_router.post(
-    "/{settlement_id}", response_model=SettlementResponseSchema
-)
+@settlements_router.post("/{settlement_id}", response_model=SettlementResponseSchema)
 async def settle_up_expensewise_api(
     settlement_id: int,
     db: AsyncSession = Depends(get_db),
