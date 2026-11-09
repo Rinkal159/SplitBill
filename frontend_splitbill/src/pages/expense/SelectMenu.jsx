@@ -91,7 +91,7 @@ export default function SelectMenu({
     option: (base, state) => ({
       ...base,
       borderRadius: "7px",
-      padding: "4px 10px",
+      padding: "6px 10px",
       fontSize: "14px",
       color: state.isSelected ? "#2563eb" : "#334155",
       backgroundColor: state.isSelected
@@ -101,6 +101,7 @@ export default function SelectMenu({
           : "#ffffff",
 
       cursor: "pointer",
+      fontWeight: "500",
 
       "&:active": {
         backgroundColor: "#dbeafe",
