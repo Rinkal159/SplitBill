@@ -1,8 +1,14 @@
 from fastapi import FastAPI
-from backend_splitbill.routers import activities_routers, auth_routers, expense_routers, friends_routers, group_routers, history_routers, profile_routers
 from backend_splitbill.routers import (
-    settlements_routers
+    activities_routers,
+    auth_routers,
+    expense_routers,
+    friends_routers,
+    group_routers,
+    history_routers,
+    profile_routers,
 )
+from backend_splitbill.routers import settlements_routers
 from backend_splitbill.exception_handling.exception_handlers import handlers
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -17,7 +23,7 @@ app.add_middleware(
     ],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 # back-end

@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from backend_splitbill.model import ExpenseSplits
 
+
 async def get_expenses_with_friend(db, current_user, friend_id):
 
     # your expenses
@@ -19,6 +20,6 @@ async def get_expenses_with_friend(db, current_user, friend_id):
     expenses_ids_with_your_friend = expenses_you_and_friend_involved.scalars().all()
 
     return {
-        "expense_ids" : expense_ids,
-        "expenses_ids_with_your_friend" : expenses_ids_with_your_friend
+        "expense_ids": expense_ids,
+        "expenses_ids_with_your_friend": expenses_ids_with_your_friend,
     }

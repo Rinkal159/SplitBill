@@ -10,7 +10,7 @@ from sqlalchemy import (
     Numeric,
     Date,
     Enum as SQLAlchemyEnum,
-    Boolean
+    Boolean,
 )
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
 from backend_splitbill.env_config import settings
@@ -63,31 +63,32 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     password: Mapped[str] = mapped_column(String(255))
     mobile_number: Mapped[str] = mapped_column(String(10), unique=True)
-    profile_picture: Mapped[str] = mapped_column(String(500), nullable=True) # public id
+    profile_picture: Mapped[str] = mapped_column(
+        String(500), nullable=True
+    )  # public id
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    
+
     @property
     def profile_picture_path(self):
         if self.profile_picture:
             url, _ = cloudinary_url(self.profile_picture)
             return url
         return "/default.png"
-       
-       
+
     # otps sent to reset the password
     password_reset_otps: Mapped[list["PasswordResetOTP"]] = relationship(
         "PasswordResetOTP",
         foreign_keys="PasswordResetOTP.user_id",
         back_populates="user",
         lazy="selectin",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
-       
+
     # friends
     # it's not like you actually sent, but your id is smaller, that's why in user_id, your id is stored
     sent_friendships: Mapped[list["Friends"]] = relationship(
@@ -177,38 +178,38 @@ class User(Base):
         lazy="selectin",
         cascade="all, delete-orphan",
     )
-    
+
     # history of group invitation which you sent
     group_invitations_as_inviter_history: Mapped[list["GroupHistory"]] = relationship(
         "GroupHistory",
         foreign_keys="GroupHistory.sender_id",
         lazy="selectin",
-        back_populates="sender"
+        back_populates="sender",
     )
-    
+
     # history of group invitation which you received
     group_invitations_as_invitee_history: Mapped[list["GroupHistory"]] = relationship(
         "GroupHistory",
         foreign_keys="GroupHistory.receiver_id",
         lazy="selectin",
-        back_populates="receiver"
+        back_populates="receiver",
     )
-    
+
     # history of all the action done by you in group
     group_actions_history_performed_by_you: Mapped[list["GroupHistory"]] = relationship(
         "GroupHistory",
         foreign_keys="GroupHistory.performed_by",
         lazy="selectin",
-        back_populates="performed_by_user"
+        back_populates="performed_by_user",
     )
-    
+
     # history of profile updates
     user_history: Mapped[list["UserHistory"]] = relationship(
         "UserHistory",
         foreign_keys="UserHistory.user_id",
         back_populates="user",
         cascade="all, delete-orphan",
-        lazy="selectin"
+        lazy="selectin",
     )
 
 
@@ -216,39 +217,44 @@ class UserHistoryAction(str, Enum):
     NAME_UPDATED = "NAME_UPDATED"
     PROFILE_PICTURE_UPDATED = "PROFILE_PICTURE_UPDATED"
     PASSWORD_UPDATED = "PASSWORD_UPDATED"
-    
-    
+
+
 class UserHistory(Base):
     __tablename__ = "user_history"
-    
+
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
+    )
     action: Mapped[UserHistoryAction] = mapped_column(SQLAlchemyEnum(UserHistoryAction))
-    performed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    performed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    user: Mapped["User"] = relationship(
+        "User", foreign_keys=[user_id], back_populates="user_history", lazy="selectin"
+    )
+
+
+class PasswordResetOTP(Base):
+    __tablename__ = "password_reset_otp"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
+    )
+    otp: Mapped[str] = mapped_column(String(255))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     user: Mapped["User"] = relationship(
         "User",
         foreign_keys=[user_id],
-        back_populates="user_history",
-        lazy="selectin"
-    )
-    
-    
-class PasswordResetOTP(Base):
-    __tablename__ = "password_reset_otp"
-    
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"))
-    otp: Mapped[str] = mapped_column(String(255))
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    used: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now()) 
-    
-    user: Mapped["User"] = relationship(
-        "User",
-        foreign_keys=[user_id],
         back_populates="password_reset_otps",
-        lazy="selectin"
+        lazy="selectin",
     )
 
 
@@ -282,7 +288,9 @@ class Invitation(Base):
     )
     invitee_email: Mapped[str] = mapped_column(String(255), nullable=True)
     invitee_mobile_number: Mapped[str] = mapped_column(String(10), nullable=True)
-    status: Mapped[InvitationStatus] = mapped_column(SQLAlchemyEnum(InvitationStatus), default=InvitationStatus.PENDING)
+    status: Mapped[InvitationStatus] = mapped_column(
+        SQLAlchemyEnum(InvitationStatus), default=InvitationStatus.PENDING
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -293,8 +301,10 @@ class Invitation(Base):
     inviter: Mapped["User"] = relationship(
         "User", foreign_keys=[inviter_id], back_populates="invitations", lazy="selectin"
     )
-    
-    invitee: Mapped["User"] = relationship("User", foreign_keys=[invitee_id], lazy="selectin")
+
+    invitee: Mapped["User"] = relationship(
+        "User", foreign_keys=[invitee_id], lazy="selectin"
+    )
 
 
 class Expense(Base):
@@ -304,7 +314,7 @@ class Expense(Base):
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(String(1000), nullable=True)
-    attachment: Mapped[str] = mapped_column(String(500), nullable=True) # public id
+    attachment: Mapped[str] = mapped_column(String(500), nullable=True)  # public id
     note: Mapped[str] = mapped_column(String(1000), nullable=True)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     expense_date: Mapped[date] = mapped_column(Date)
@@ -317,9 +327,9 @@ class Expense(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    
+
     # attachment url
-    @property 
+    @property
     def attachment_url(self):
         if self.attachment:
             url, _ = cloudinary_url(self.attachment)
@@ -556,7 +566,9 @@ class FriendsHistory(Base):
         ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"), nullable=True
     )
 
-    invitation_id: Mapped[int] = mapped_column(ForeignKey("invitations.id"), nullable=True)
+    invitation_id: Mapped[int] = mapped_column(
+        ForeignKey("invitations.id"), nullable=True
+    )
 
     guest_invitee: Mapped[str] = mapped_column(String(255), nullable=True)
 
@@ -603,9 +615,9 @@ class Group(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    
+
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    
+
     @property
     def group_picture_path(self):
         if self.group_picture:
@@ -653,13 +665,13 @@ class Group(Base):
         lazy="selectin",
         cascade="all, delete-orphan",
     )
-    
+
     # history of this group
     group_history: Mapped[list["GroupHistory"]] = relationship(
         "GroupHistory",
         foreign_keys="GroupHistory.group_id",
         lazy="selectin",
-        back_populates="group"
+        back_populates="group",
     )
 
 
@@ -748,95 +760,92 @@ class GroupInvitation(Base):
         back_populates="group_invitations",
         lazy="selectin",
     )
-    
+
     # invitee
     invitee: Mapped["User"] = relationship(
-        "User",
-        foreign_keys=[invitee_id],
-        lazy="selectin"
+        "User", foreign_keys=[invitee_id], lazy="selectin"
     )
-    
+
     # history of this invitation
     history_of_invitation: Mapped[list["GroupHistory"]] = relationship(
         "GroupHistory",
         foreign_keys="GroupHistory.invitation_id",
         lazy="selectin",
-        back_populates="invitation"
+        back_populates="invitation",
     )
 
 
 class GroupHistoryAction(str, Enum):
-    GROUP_CREATED="GROUP_CREATED"
-    GROUP_UPDATED="GROUP_UPDATED"
-    GROUP_INVITATION_SENT="GROUP_INVITATION_SENT"
-    GROUP_INVITATION_ACCEPTED="GROUP_INVITATION_ACCEPTED"
-    GROUP_INVITATION_CANCELLED="GROUP_INVITATION_CANCELLED"
-    MEMBER_LEFT="MEMBER_LEFT"
-    MEMBER_REMOVED="MEMBER_REMOVED"
-    ADMIN_TRANSFERRED="ADMIN_TRANSFERRED"
-    
-    
+    GROUP_CREATED = "GROUP_CREATED"
+    GROUP_UPDATED = "GROUP_UPDATED"
+    GROUP_INVITATION_SENT = "GROUP_INVITATION_SENT"
+    GROUP_INVITATION_ACCEPTED = "GROUP_INVITATION_ACCEPTED"
+    GROUP_INVITATION_CANCELLED = "GROUP_INVITATION_CANCELLED"
+    MEMBER_LEFT = "MEMBER_LEFT"
+    MEMBER_REMOVED = "MEMBER_REMOVED"
+    ADMIN_TRANSFERRED = "ADMIN_TRANSFERRED"
+
+
 class GroupHistory(Base):
     __tablename__ = "group_history"
-    
+
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id"))
-    invitation_id: Mapped[int] = mapped_column(ForeignKey("group_invitations.id"), nullable=True)
-    
-    sender_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=True
+    invitation_id: Mapped[int] = mapped_column(
+        ForeignKey("group_invitations.id"), nullable=True
     )
-    receiver_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+
+    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=True)
+    receiver_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=True)
     guest_invitee: Mapped[str] = mapped_column(String(255), nullable=True)
-    
-    action: Mapped[GroupHistoryAction] = mapped_column(SQLAlchemyEnum(GroupHistoryAction))
+
+    action: Mapped[GroupHistoryAction] = mapped_column(
+        SQLAlchemyEnum(GroupHistoryAction)
+    )
     performed_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     performed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    
+
     # history belongs to which group
     group: Mapped["Group"] = relationship(
         "Group",
         foreign_keys=[group_id],
         lazy="selectin",
-        back_populates="group_history"
+        back_populates="group_history",
     )
-    
+
     # invitation
     invitation: Mapped["GroupInvitation"] = relationship(
         "GroupInvitation",
         foreign_keys=[invitation_id],
         lazy="selectin",
-        back_populates="history_of_invitation"
+        back_populates="history_of_invitation",
     )
-    
+
     # who sent the invitation
     sender: Mapped["User"] = relationship(
-        "User", 
-        foreign_keys=[sender_id], 
+        "User",
+        foreign_keys=[sender_id],
         lazy="selectin",
-        back_populates="group_invitations_as_inviter_history"
+        back_populates="group_invitations_as_inviter_history",
     )
 
     # who received the invitation
     receiver: Mapped["User"] = relationship(
-        "User", 
-        foreign_keys=[receiver_id], 
+        "User",
+        foreign_keys=[receiver_id],
         lazy="selectin",
-        back_populates="group_invitations_as_invitee_history"
-    )
-    
-    # who performed that action
-    performed_by_user: Mapped["User"] = relationship(
-        "User", 
-        foreign_keys=[performed_by],
-        lazy="selectin",
-        back_populates="group_actions_history_performed_by_you"
+        back_populates="group_invitations_as_invitee_history",
     )
 
+    # who performed that action
+    performed_by_user: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[performed_by],
+        lazy="selectin",
+        back_populates="group_actions_history_performed_by_you",
+    )
 
 
 # asynchronous way to create database tables

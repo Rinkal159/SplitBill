@@ -27,10 +27,15 @@ async def get_expense_groups(expense_ids, db, newest_first):
     #     9: [split10, split11]
     # }
 
-    # sorts the splits according to expense's expense date, so newest expense splits comes first, the order is newest -> oldest
+    # Sort by the entered expense date, then by when it was created. The ID is
+    # a stable tie-breaker for databases whose timestamp precision is limited.
     sorted_groups = sorted(
         expense_groups.values(),
-        key=lambda splits: splits[0].expense.expense_date,
+        key=lambda splits: (
+            splits[0].expense.expense_date,
+            splits[0].expense.created_at,
+            splits[0].expense.id,
+        ),
         reverse=newest_first,
     )
 

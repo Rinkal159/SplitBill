@@ -3,6 +3,7 @@ from sqlalchemy import select, or_, and_
 
 from backend_splitbill.model import User, Friends
 
+
 async def is_your_friend(db, current_user, friend_id):
     # friend not exist
     result = await db.execute(select(User).where(User.id == friend_id))
@@ -34,6 +35,5 @@ async def is_your_friend(db, current_user, friend_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Friendship not found"
         )
-        
+
     return friend
-        
