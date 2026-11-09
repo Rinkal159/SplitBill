@@ -3,13 +3,17 @@ from decimal import Decimal
 
 def get_creditors_debtors(splits, creditors, debtors, settlement_groups):
     balance_creditors = {}
+    original_creditors = {}
+    original_debtors = {}
 
     for split in splits:
         balance = split.paid_amount - split.share_amount
         if balance > 0:
-            creditors.append({"user": split.user, "balance": balance})
+            original_creditors[split.user.id] = {"user": split.user, "balance": balance}
+            creditors[split.user.id] = {"user": split.user, "balance": balance}
 
         elif balance < 0:
+            original_debtors[split.user.id] = {"user": split.user, "balance": balance}
             existed_settlement = settlement_groups.get(split.id, [])
 
             total_amount_settled = Decimal("0")
@@ -27,12 +31,10 @@ def get_creditors_debtors(splits, creditors, debtors, settlement_groups):
             balance += total_amount_settled
 
             if balance < 0:
-                debtors.append({"user": split.user, "balance": balance})
+                debtors[split.user.id] = {"user": split.user, "balance": balance}
 
-    for c in creditors:
-        remaining = c["balance"] - balance_creditors.get(c["user"].id, Decimal("0"))
+    for user_id, creditor in creditors.items():
+        remaining = creditor["balance"] - balance_creditors.get(user_id, Decimal("0"))
+        creditor["balance"] = max(remaining, Decimal("0"))
 
-        if remaining > 0:
-            c["balance"] = remaining
-        else:
-            c["balance"] = Decimal("0")
+    return original_creditors, original_debtors
