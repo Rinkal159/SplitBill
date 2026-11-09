@@ -30,6 +30,9 @@ from backend_splitbill.utils.get_friend_balances import get_friend_balances
 from typing import Annotated
 from backend_splitbill.utils.is_your_friend import is_your_friend
 from backend_splitbill.utils.get_expenses_with_friend import get_expenses_with_friend
+from backend_splitbill.utils.get_friend_settlement_data import (
+    get_friend_settlement_data,
+)
 
 from backend_splitbill.schemas.expense_schema import (
     ExpenseCreate as ExpenseCreateSchema,
@@ -198,20 +201,59 @@ async def get_all_borrowing_and_lendings_api(
     )
 
     general_balance = {}
+    borrowings = {}
+    lendings = {}
+    total_borrowings = Decimal("0")
+    total_lendings = Decimal("0")
+
+    def update_balance(user, delta):
+        nonlocal total_borrowings, total_lendings
+
+        user_id = user.id
+        previous = general_balance.get(user_id, Decimal("0"))
+        current = previous + delta
+
+        if previous < 0:
+            total_borrowings -= abs(previous)
+            borrowings.pop(user_id, None)
+        elif previous > 0:
+            total_lendings -= previous
+            lendings.pop(user_id, None)
+
+        general_balance[user_id] = current
+        if current < 0:
+            amount = abs(current)
+            total_borrowings += amount
+            borrowings[user_id] = {
+                "borrowed_from": UserDetailSchema.model_validate(user),
+                "amount": amount,
+            }
+        elif current > 0:
+            total_lendings += current
+            lendings[user_id] = {
+                "lent_to": UserDetailSchema.model_validate(user),
+                "amount": current,
+            }
 
     for splits in expense_groups:
         settlement_groups = await get_settlement_groups(splits, db)
 
-        creditors = []
-        debtors = []
-        get_creditors_debtors(splits, creditors, debtors, settlement_groups)
+        creditors = {}
+        debtors = {}
+        _, _ = get_creditors_debtors(splits, creditors, debtors, settlement_groups)
+
+        creditor_ids = list(creditors)
+        debtor_ids = list(debtors)
 
         i = 0  # creditor
         j = 0  # debtor
 
         while i < len(creditors) and j < len(debtors):
-            creditor = creditors[i]
-            debtor = debtors[j]
+            creditor_id = creditor_ids[i]
+            debtor_id = debtor_ids[j]
+
+            creditor = creditors[creditor_id]
+            debtor = debtors[debtor_id]
 
             creditor_balance = creditor["balance"]
             debtor_balance = abs(debtor["balance"])
@@ -220,30 +262,11 @@ async def get_all_borrowing_and_lendings_api(
 
             # if you're creditor then you "lent" to other participants (Paisa diya)
             if creditor["user"].id == current_user.id:
-                debtor_id = debtor["user"]
-                existed_debtor = general_balance.get(debtor_id.id)
-
-                general_balance[debtor_id.id] = {
-                    "user": UserDetailSchema.model_validate(debtor["user"]),
-                    "amount": (
-                        existed_debtor["amount"] + transfer
-                        if existed_debtor
-                        else transfer
-                    ),
-                }
+                update_balance(debtor["user"], transfer)
 
             # if you're debtor then you "borrowed" from other participants (Paisa liya)
             elif debtor["user"].id == current_user.id:
-                creditor_id = creditor["user"]
-                existed_creditor = general_balance.get(creditor_id.id)
-                general_balance[creditor_id.id] = {
-                    "user": UserDetailSchema.model_validate(creditor["user"]),
-                    "amount": (
-                        existed_creditor["amount"] - transfer
-                        if existed_creditor
-                        else -transfer
-                    ),
-                }
+                update_balance(creditor["user"], -transfer)
 
             creditor["balance"] -= transfer
             debtor["balance"] += transfer
@@ -254,29 +277,11 @@ async def get_all_borrowing_and_lendings_api(
             if abs(debtor["balance"]) <= Decimal("0"):
                 j += 1
 
-    borrowings = []
-    lendings = []
-    total_borrowings = Decimal("0")
-    total_lendings = Decimal("0")
-
-    for curr in general_balance.values():
-        if curr.get("amount") == 0:
-            continue
-
-        if curr.get("amount") < 0:
-            total_borrowings += abs(curr.get("amount"))
-            borrowings.append(
-                {"borrowed_from": curr.get("user"), "amount": abs(curr.get("amount"))}
-            )
-        else:
-            total_lendings += curr.get("amount")
-            lendings.append({"lent_to": curr.get("user"), "amount": curr.get("amount")})
-
     return {
         "total_borrowings": total_borrowings,
         "total_lendings": total_lendings,
-        "borrowings": borrowings,
-        "lendings": lendings,
+        "borrowings": list(borrowings.values()),
+        "lendings": list(lendings.values()),
     }
 
 
@@ -332,10 +337,8 @@ async def get_single_expense(
         )
 
     # get settlements for this expense
-    expenses, friend_balances, total_balance_with_friend, total_balance = (
-        await get_all_expenses_in_which_user_involved(
-            expense_ids=[expense_id], db=db, current_user=current_user
-        )
+    expenses, _, _ = await get_all_expenses_in_which_user_involved(
+        expense_ids=[expense_id], db=db, current_user=current_user
     )
 
     return {"expenses": expenses}
@@ -368,12 +371,7 @@ async def get_all_expenses_api(
     )
     expense_ids = result.scalars().all()
 
-    # result = await db.execute(select(ExpenseSplits.expense_id).where(ExpenseSplits.user_id == current_user.id))
-    # all_expense_ids = result.scalars().all()
-
-    # friend_balances =  await get_friend_balances(expense_ids=all_expense_ids, db=db, current_user=current_user)
-
-    expenses, friend_balances, total_balance_with_friend, total_balance = (
+    expenses, friend_balances, total_balance = (
         await get_all_expenses_in_which_user_involved(
             expense_ids=expense_ids, db=db, current_user=current_user
         )
@@ -447,7 +445,7 @@ async def get_all_group_expenses_api(
     )
     expense_ids = result.scalars().all()
 
-    expenses, friend_balances, total_balance_with_friend, total_balance = (
+    expenses, friend_balances, total_balance = (
         await get_all_expenses_in_which_user_involved(
             expense_ids=expense_ids, db=db, current_user=current_user
         )
@@ -464,10 +462,12 @@ async def get_all_group_expenses_api(
     }
 
 
-# # * get groups in which user is in debt
-@expense_router.get("/groups/debt", response_model=list[GroupDebtSchema])
+# * get groups in which user is in debt
+@expense_router.get("/groups/debt/{friend_id}", response_model=list[GroupDebtSchema])
 async def get_debt_groups_api(
-    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
+    friend_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     # groups in which you're a member
     result = await db.execute(
@@ -487,16 +487,20 @@ async def get_debt_groups_api(
             select(Expense.id).where(Expense.group_id == group.id)
         )
         expense_ids = result.scalars().all()
+
         if not expense_ids:
             continue
 
-        _, _, _, total_balance = await get_all_expenses_in_which_user_involved(
-            expense_ids=expense_ids,
+        settlement_data = await get_friend_settlement_data(
+            friend_id=friend_id,
+            expense_ids={"expense_ids": expense_ids},
             db=db,
             current_user=current_user,
         )
-        if total_balance < Decimal("0"):
-            debt_groups.append({"group": group, "debt_amount": abs(total_balance)})
+        if settlement_data["total_balance"] < Decimal("0"):
+            debt_groups.append(
+                {"group": group, "debt_amount": abs(settlement_data["total_balance"])}
+            )
 
     return debt_groups
 
@@ -543,16 +547,22 @@ async def getTotalBalanceWithFriend(
     for splits in expense_groups:
         settlement_groups = await get_settlement_groups(splits, db)
 
-        creditors = []
-        debtors = []
-        get_creditors_debtors(splits, creditors, debtors, settlement_groups)
+        creditors = {}
+        debtors = {}
+        _, _ = get_creditors_debtors(splits, creditors, debtors, settlement_groups)
+
+        creditor_ids = list(creditors)
+        debtor_ids = list(debtors)
 
         i = 0
         j = 0
 
         while i < len(creditors) and j < len(debtors):
-            creditor = creditors[i]
-            debtor = debtors[j]
+            creditor_id = creditor_ids[i]
+            debtor_id = debtor_ids[j]
+
+            creditor = creditors[creditor_id]
+            debtor = debtors[debtor_id]
 
             creditor_balance = creditor["balance"]
             debtor_balance = abs(debtor["balance"])
@@ -630,24 +640,32 @@ async def getTotalBalanceWithAllFriends(
     for splits in expense_groups:
         settlement_groups = await get_settlement_groups(splits, db)
 
-        creditors = []
-        debtors = []
-        get_creditors_debtors(
+        creditors = {}
+        debtors = {}
+
+        _, _ = get_creditors_debtors(
             splits=splits,
             settlement_groups=settlement_groups,
             creditors=creditors,
             debtors=debtors,
         )
 
+        creditor_ids = list(creditors)
+        debtor_ids = list(debtors)
+
         i = 0
         j = 0
 
         while i < len(creditors) and j < len(debtors):
-            creditor = creditors[i]
-            debtor = debtors[j]
+            creditor_id = creditor_ids[i]
+            debtor_id = debtor_ids[j]
+
+            creditor = creditors[creditor_id]
+            debtor = debtors[debtor_id]
 
             creditor_balance = creditor["balance"]
             debtor_balance = abs(debtor["balance"])
+
             transfer = min(creditor_balance, debtor_balance)
 
             # Current user lent to a friend.
