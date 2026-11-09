@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Annotated, Literal
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime
 
 
 class Base(BaseModel):
@@ -59,6 +59,7 @@ class ExpenseCreateResponse(Base):
     note: str | None
     total_amount: Decimal
     expense_date: date
+    created_at: datetime
 
 
 # * ExpenseResponse
@@ -68,6 +69,7 @@ class ExpenseDetail(Base):
     title: str
     total_amount: Decimal
     expense_date: date
+    created_at: datetime
     created_by: int
     creator: UserDetail
 
@@ -119,8 +121,15 @@ class BorrowingsAndLendings(Base):
 
 
 # * FriendsSettlements
+class ExpenseSplitDetail(Base):
+    user: UserDetail
+    share_amount: Decimal
+    paid_amount: Decimal
+
+
 class FriendExpenseSchema(Base):
     expense: ExpenseDetail
+    splits: list[ExpenseSplitDetail]
     your_settlements: list[YourSettlementSchema]
     other_settlements: list[SettlementSchema]
     your_expensewise_balance_with_friend: Decimal
