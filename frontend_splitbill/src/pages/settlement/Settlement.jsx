@@ -6,13 +6,24 @@ import getBackendError from "../../utils/getBackendError";
 import api from "../../api/axios";
 import Error from "../error/Error";
 
-function Settlement({ onClose, toUser, settlementValue }) {
+function Settlement({
+  onClose,
+  toUser,
+  settlementValue,
+  overallValue,
+  onSettlementRequestSent,
+  setFriendExpensesLoading,
+  loadSentSettlementReuqests,
+  shouldIntializeWithOverall,
+}) {
+  console.log("OVERALL: ", overallValue);
+
   const today = new Date();
   const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const overallOption = {
     value: "overall",
     label: "Overall",
-    debtAmount: Math.abs(Number(settlementValue)),
+    debtAmount: formatAmount(Math.abs(overallValue)),
     isOverall: true,
   };
   const [settlement, setSettlement] = useState({
@@ -24,26 +35,27 @@ function Settlement({ onClose, toUser, settlementValue }) {
     group_id: null,
   });
   const [groupsInDebt, setGroupsInDebt] = useState([]);
-  const [selectedSettlementOption, setSelectedSettlementOption] =
-    useState(overallOption);
+  const [selectedSettlementOption, setSelectedSettlementOption] = useState(
+    overallValue < 0 && shouldIntializeWithOverall && overallOption,
+  );
 
   // loading
-  const [loading, setLoading] = useState(true);
+  const [settlementDataLoading, setsettlementDataLoading] = useState(true);
   const [settleLoading, setSettleLoading] = useState(false);
 
   // error
   const [frontErrors, setFrontErrors] = useState([]);
   const [backErrors, setBackErrors] = useState({});
 
-  // initial amount
-  let initialAmount = settlementValue;
+  // The amount limit follows the currently selected scope.
+  const initialAmount = Number(selectedSettlementOption.debtAmount);
 
   // cash modal
   const [showCashConfirmModal, setShowCashConfirmModal] = useState(false);
 
   const getGroupsInWhichYouInDebt = async () => {
     try {
-      const res = await api.get("/expenses/groups/debt");
+      const res = await api.get(`/expenses/groups/debt/${toUser.id}`);
       setGroupsInDebt(
         res.data.map(({ group, debt_amount }) => ({
           value: group.id,
@@ -54,7 +66,7 @@ function Settlement({ onClose, toUser, settlementValue }) {
     } catch (error) {
       setBackErrors(getBackendError(error));
     } finally {
-      setLoading(false);
+      setsettlementDataLoading(false);
     }
   };
 
@@ -99,9 +111,12 @@ function Settlement({ onClose, toUser, settlementValue }) {
       setSettleLoading(true);
       setShowCashConfirmModal(false);
       const res = await api.post("/settlements", settlement);
-      console.log(res);
-
       onClose();
+
+      setFriendExpensesLoading(true);
+      await onSettlementRequestSent();
+
+      await loadSentSettlementReuqests();
     } catch (error) {
       setSettleLoading(false);
       setBackErrors(getBackendError(error));
@@ -142,7 +157,7 @@ function Settlement({ onClose, toUser, settlementValue }) {
             />
           </div>
 
-          {loading ? (
+          {settlementDataLoading ? (
             <div className="flex justify-center">
               {" "}
               <Loading msg={"Settlement loading"} />{" "}
@@ -154,16 +169,22 @@ function Settlement({ onClose, toUser, settlementValue }) {
                 <Error errors={backErrors.error} type={backErrors.type} />
               )}
               <SelectMenu
-                options={[overallOption, ...groupsInDebt]}
+                options={[
+                  ...(overallValue < 0 && overallOption ? [overallOption] : []),
+                  ...groupsInDebt,
+                ]}
                 value={selectedSettlementOption}
                 onChange={(option) => {
                   const selectedOption = option ?? overallOption;
-                  console.log(selectedOption);
-
                   setSelectedSettlementOption(selectedOption);
+                  setFrontErrors([]);
+                  setBackErrors({});
                   setSettlement((prev) => ({
                     ...prev,
-                    amount: formatAmount(selectedOption.debtAmount),
+                    amount: Number(formatAmount(selectedOption.debtAmount)),
+                    group_id: selectedOption.isOverall
+                      ? null
+                      : Number(selectedOption.value),
                   }));
                 }}
                 field="settlement-group"
@@ -255,7 +276,7 @@ function Settlement({ onClose, toUser, settlementValue }) {
                   Object.keys(backErrors).length !== 0
                 }
               >
-                Settle up
+                {settleLoading ? "Sending Settlement Request..." : "Settle up"}
               </button>
             </div>
           )}
