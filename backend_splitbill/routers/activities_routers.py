@@ -34,6 +34,7 @@ from backend_splitbill.model import (
     GroupHistoryAction,
     GroupMember,
     UserHistory,
+    SettlementStatus,
 )
 
 activites_router = APIRouter(prefix="/api/activities", tags=["Activities"])
@@ -60,23 +61,34 @@ def create_summary_for_expense(row, current_user_id):
 
 def create_summary_for_settlement(row, current_user_id):
     """Create summary for settlement activities"""
-    from_user = row["performed_by_user"]
-    to_user = row["affected_user_obj"]
-    amount = row["amount_settled"]
-
-    if not from_user or not to_user:
+    actor = row["performed_by_user"]
+    other_user = row["affected_user_obj"]
+    if not actor or not other_user:
         return None
 
-    from_user_name = from_user.name
-    to_user_name = to_user.name
+    action = row["action"]
+    amount = row["amount_settled"]
+    group = row.get("group_obj")
+    scope = f" for {group.name}" if group else ""
+    actor_is_current_user = actor.id == current_user_id
 
-    # Check if current user is involved
-    if from_user.id == current_user_id:
-        return f"you paid {amount} to {to_user_name}"
-    elif to_user.id == current_user_id:
-        return f"{from_user_name} paid {amount} to you"
-    else:
-        return f"{from_user_name} paid {amount} to {to_user_name}"
+    if action == "REQUEST_SENT":
+        if actor_is_current_user:
+            return f"You sent a settlement request of ₹{amount} to {other_user.name}{scope}"
+        return f"{actor.name} sent you a settlement request of ₹{amount}{scope}"
+    if action == "REQUEST_CANCELLED":
+        if actor_is_current_user:
+            return f"You cancelled your settlement request to {other_user.name}{scope}"
+        return f"{actor.name} cancelled their settlement request{scope}"
+    if action == "REQUEST_CONFIRMED":
+        if actor_is_current_user:
+            return f"You confirmed {other_user.name}'s settlement request of ₹{amount}{scope}"
+        return f"{actor.name} confirmed your settlement request of ₹{amount}{scope}"
+    if action == "REQUEST_REJECTED":
+        if actor_is_current_user:
+            return f"You rejected {other_user.name}'s settlement request of ₹{amount}{scope}"
+        return f"{actor.name} rejected your settlement request of ₹{amount}{scope}"
+    return None
 
 
 def create_summary_for_friend(row, current_user_id):
@@ -96,7 +108,7 @@ def create_summary_for_friend(row, current_user_id):
             if performed_by.id == current_user_id:
                 return f"You sent a friend request to {affected_name}"
             else:
-                return f"You sent a friend request to {affected_name}"
+                return f"{performed_by.name} sent a friend request to {affected_name}"
         else:
             return f"You sent a friend request to {row["affected_guest"]}"
 
@@ -108,13 +120,12 @@ def create_summary_for_friend(row, current_user_id):
             return f"You cancelled a friend request sent to {row["affected_guest"]}"
 
     elif action == FriendsHistoryAction.REQUEST_ACCEPTED.value:
-        sender = row.get("sender")  # You might need to add sender to your query
         if affected_user:
             affected_name = affected_user.name
-            if affected_user.id == current_user_id:
-                return f"You accepted {performer_name}'s friend request"
+            if performed_by.id == current_user_id:
+                return f"You accepted {affected_name}'s friend request"
             else:
-                return f"{affected_name} accepted your friend request"
+                return f"{performed_by.name} accepted your friend request"
         else:
             return f"Friend request accepted"
 
@@ -155,7 +166,7 @@ def create_summary_for_group(row, current_user_id):
     elif action == GroupHistoryAction.GROUP_INVITATION_SENT.value:
         if affected_user:
             affected_name = affected_user.name
-            return f"{"You" if performed_by.id ==current_user_id else performer_name } sent a group invitation to {affected_name} for {group_name}"
+            return f"{"You" if performed_by.id ==current_user_id else performer_name } sent a group invitation to {"You" if affected_user.id == current_user_id else affected_name} for {group_name}"
         else:
             guest = row.get("affected_guest", "a guest")
             return f"{"You" if performed_by.id ==current_user_id else performer_name } sent a group invitation to {guest} for {group_name}"
@@ -163,7 +174,7 @@ def create_summary_for_group(row, current_user_id):
     elif action == GroupHistoryAction.MEMBER_REMOVED.value:
         if affected_user:
             affected_name = affected_user.name
-            return f"{"You" if performed_by.id ==current_user_id else performer_name } removed {affected_name} from {group_name}"
+            return f"{"You" if performed_by.id ==current_user_id else performer_name } removed {"You" if affected_user.id == current_user_id else affected_name} from {group_name}"
         else:
             guest = row.get("affected_guest", "a member")
             return f"{"You" if performed_by.id ==current_user_id else performer_name } removed {guest} from {group_name}"
@@ -171,15 +182,14 @@ def create_summary_for_group(row, current_user_id):
     elif action == GroupHistoryAction.ADMIN_TRANSFERRED.value:
         if affected_user:
             affected_name = affected_user.name
-            return f"{"You" if performed_by.id ==current_user_id else performer_name } transferred admin rights to {affected_name} in {group_name}"
+            return f"{"You" if performed_by.id ==current_user_id else performer_name } transferred admin rights to {"You" if affected_user.id == current_user_id else affected_name} in {group_name}"
         else:
             guest = row.get("affected_guest", "a member")
             return f"{"You" if performed_by.id ==current_user_id else performer_name } transferred admin rights to {guest} in {group_name}"
 
     elif action == GroupHistoryAction.GROUP_INVITATION_ACCEPTED.value:
         if performed_by:
-            performer_name = performed_by.name
-            return f"{performer_name} accepted group invitation for {group_name}"
+            return f"{"You" if performed_by.id == current_user_id else performed_by.name} accepted group invitation for {group_name}"
         else:
             guest = row.get("affected_guest", "a member")
             return f"{guest} accepted group invitation for {group_name}"
@@ -205,11 +215,7 @@ def create_activity_summary(row, current_user_id):
 
     if activity_type in ["EXPENSE", "GROUP_EXPENSE"]:
         return create_summary_for_expense(row, current_user_id)
-    elif activity_type in [
-        "EXPENSEWISE_SETTLEMENT",
-        "GROUPWISE_SETTLEMENT",
-        "OVERALL_SETTLEMENT",
-    ]:
+    elif activity_type == "SETTLEMENT":
         return create_summary_for_settlement(row, current_user_id)
     elif activity_type == "FRIEND":
         return create_summary_for_friend(row, current_user_id)
@@ -265,13 +271,10 @@ async def get_activities_api(
         )
     )
 
-    settlement_query = select(
+    settlement_created_query = select(
         literal("SETTLEMENT").label("type"),
         Settlement.group_id.label("group_id"),
-        case(
-            (Settlement.from_user == current_user.id, literal("PAID")),
-            else_=literal("RECEIVED"),
-        ).label("action"),
+        literal("REQUEST_SENT").label("action"),
         Settlement.from_user.label("performed_by"),
         Settlement.to_user.label("affected_user"),
         cast(None, String).label("affected_guest"),
@@ -280,13 +283,85 @@ async def get_activities_api(
             else_=literal(False),
         ).label("performed_by_me"),
         Settlement.created_at.label("performed_at"),
-        Settlement.amount.label("amount_settled"),
+        cast(Settlement.amount, Numeric(10, 2)).label("amount_settled"),
         cast(None, String).label("expense_title"),
+        Settlement.expense_id.label("expense_id"),
     ).where(
         or_(
             Settlement.from_user == current_user.id,
             Settlement.to_user == current_user.id,
-        )
+        ),
+        or_(
+            Settlement.status != SettlementStatus.CANCELLED,
+            Settlement.from_user == current_user.id,
+        ),
+    )
+
+    settlement_response_actor = case(
+        (Settlement.status == SettlementStatus.CANCELLED, Settlement.from_user),
+        else_=Settlement.to_user,
+    )
+    settlement_response_affected = case(
+        (Settlement.status == SettlementStatus.CANCELLED, Settlement.to_user),
+        else_=Settlement.from_user,
+    )
+    settlement_response_query = select(
+        literal("SETTLEMENT").label("type"),
+        Settlement.group_id.label("group_id"),
+        case(
+            (
+                Settlement.status == SettlementStatus.CANCELLED,
+                literal("REQUEST_CANCELLED"),
+            ),
+            (
+                Settlement.status == SettlementStatus.CONFIRMED,
+                literal("REQUEST_CONFIRMED"),
+            ),
+            else_=literal("REQUEST_REJECTED"),
+        ).label("action"),
+        settlement_response_actor.label("performed_by"),
+        settlement_response_affected.label("affected_user"),
+        cast(None, String).label("affected_guest"),
+        case(
+            (settlement_response_actor == current_user.id, literal(True)),
+            else_=literal(False),
+        ).label("performed_by_me"),
+        Settlement.responded_at.label("performed_at"),
+        cast(Settlement.amount, Numeric(10, 2)).label("amount_settled"),
+        cast(None, String).label("expense_title"),
+        Settlement.expense_id.label("expense_id"),
+    ).where(
+        Settlement.responded_at.is_not(None),
+        or_(
+            and_(
+                Settlement.status == SettlementStatus.CANCELLED,
+                Settlement.from_user == current_user.id,
+            ),
+            and_(
+                Settlement.status.in_(
+                    [SettlementStatus.CONFIRMED, SettlementStatus.REJECTED]
+                ),
+                or_(
+                    Settlement.from_user == current_user.id,
+                    Settlement.to_user == current_user.id,
+                ),
+            ),
+        ),
+    )
+    settlement_events = union_all(
+        settlement_created_query, settlement_response_query
+    ).subquery()
+    settlement_query = select(
+        settlement_events.c.type,
+        settlement_events.c.group_id,
+        settlement_events.c.action,
+        settlement_events.c.performed_by,
+        settlement_events.c.affected_user,
+        settlement_events.c.affected_guest,
+        settlement_events.c.performed_by_me,
+        settlement_events.c.performed_at,
+        settlement_events.c.amount_settled,
+        settlement_events.c.expense_title,
     )
 
     friends_query = select(
@@ -420,14 +495,14 @@ async def get_activities_api(
     elif category == "SETTLEMENT":
         query = [settlement_query]
     elif category == "EXPENSEWISE_SETTLEMENT":
-        query = [settlement_query.where(Settlement.expense_id.is_not(None))]
+        query = [settlement_query.where(settlement_events.c.expense_id.is_not(None))]
     elif category == "GROUPWISE_SETTLEMENT":
-        query = [settlement_query.where(Settlement.group_id.is_not(None))]
+        query = [settlement_query.where(settlement_events.c.group_id.is_not(None))]
     elif category == "OVERALL_SETTLEMENT":
         query = [
             settlement_query.where(
-                Settlement.expense_id.is_(None),
-                Settlement.group_id.is_(None),
+                settlement_events.c.expense_id.is_(None),
+                settlement_events.c.group_id.is_(None),
             )
         ]
     elif category == "FRIEND":
