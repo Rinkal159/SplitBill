@@ -9,7 +9,7 @@ import getBackendError from "../../utils/getBackendError";
 import Error from "../error/Error";
 import Settlement from "../settlement/Settlement";
 
-function FriendExpenses({ friend }) {
+function FriendExpenses({ friend, loadSentSettlementReuqests }) {
   const { user } = useContext(AuthContext);
   const [expenses, setExpenses] = useState({});
   const [openExpense, setOpenExpense] = useState(null);
@@ -265,6 +265,12 @@ function FriendExpenses({ friend }) {
                         {expense.expense.title}
                       </h1>
 
+                      {expense.expense.group && (
+                        <p className="pb-1 text-sm font-medium text-slate-500">
+                          Group: <span className="text-slate-600">{expense.expense.group.name}</span>
+                        </p>
+                      )}
+
                       <p className="text-2xl font-semibold text-slate-800">
                         ₹{formatAmount(expense.expense.total_amount)}
                       </p>
@@ -317,7 +323,7 @@ function FriendExpenses({ friend }) {
                               key={your.to_user.id}
                             >
                               <img
-                                className="small-img !rounded-full"
+                                className="small-img object-cover border-2 border-white"
                                 src={user.profile_picture_path}
                                 alt={user.name}
                               />
@@ -458,6 +464,11 @@ function FriendExpenses({ friend }) {
           onClose={() => setShowSettlementModal(false)}
           toUser={friend}
           settlementValue={formatAmount(Math.abs(balance))}
+          overallValue={expenses.total_balance}
+          onSettlementRequestSent={getExpenses}
+          setFriendExpensesLoading={setLoading}
+          loadSentSettlementReuqests={loadSentSettlementReuqests}
+          shouldIntializeWithOverall={activeFilter !== "group expenses" && activeFilter !== "individual expenses"}
         />
       )}
     </div>
