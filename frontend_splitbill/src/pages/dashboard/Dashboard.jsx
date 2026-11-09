@@ -16,6 +16,7 @@ import GroupExpenses from "../group/GroupExpenses";
 import Loading from "../loading/Loading";
 import Error from "../error/Error";
 import getBackendError from "../../utils/getBackendError";
+import CashSettlementRequests from "../settlement/CashSettlementRequests";
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState({});
@@ -35,6 +36,9 @@ function Dashboard() {
   // sentGroupInvitations is here
   const [sentGroupInvitations, setSentGroupInvitations] = useState([]);
 
+  // sentSettlementRequests is here
+  const [sentSettlementRequests, setSentSettlementRequests] = useState([]);
+
   const [selectedFriend, setSelectedFriend] = useState(null);
   const [selectedGroup, setSelectedGroup] = useState(null);
 
@@ -45,6 +49,7 @@ function Dashboard() {
     groups: true,
     sentFriendInvitations: true,
     sentGroupInvitations: true,
+    sentSettlementRequests: true,
   });
   const [backErrors, setBackErrors] = useState({});
 
@@ -55,7 +60,7 @@ function Dashboard() {
     "Friends",
     "Groups",
     "Invitations",
-    "Settlements"
+    "Settlements",
   ];
 
   const getDashboardData = async () => {
@@ -147,12 +152,27 @@ function Dashboard() {
     }
   };
 
+  const getSentSettlementRequests = async () => {
+    try {
+      const res = await api.get("/settlements/requests/sent");
+      console.log(res.data);
+      setSentSettlementRequests(res.data);
+      setLoading((prevLoading) => ({
+        ...prevLoading,
+        sentSettlementRequests: false,
+      }));
+    } catch (error) {
+      setBackErrors(getBackendError(error));
+    }
+  };
+
   useEffect(() => {
     getDashboardData();
     getFriends();
     getGroups();
     getSentFriendInvitations();
     getSentGroupInvitations();
+    getSentSettlementRequests();
   }, []);
 
   const [activeSubvalue, setActiveSubValue] = useState(null);
@@ -190,6 +210,9 @@ function Dashboard() {
     } else if (subvalue === "Group invitations") {
       setactiveSidebarTitle("Invitations");
       setContentRenderer("GroupInvitations");
+    } else if (subvalue == "Cash Settlement Requests") {
+      setactiveSidebarTitle("Settlements");
+      setContentRenderer("CashSettlementRequests");
     } else {
       if (subvalue.email) {
         onFriendClickEvent(subvalue);
@@ -231,7 +254,7 @@ function Dashboard() {
       case "AllExpenses":
         return <AllExpenses />;
       case "FriendExpenses":
-        return <FriendExpenses friend={selectedFriend} />;
+        return <FriendExpenses friend={selectedFriend} loadSentSettlementReuqests={getSentSettlementRequests} />;
       case "Friends":
         return (
           <Friends
@@ -252,6 +275,14 @@ function Dashboard() {
             receivedGroup={selectedGroup}
             onInvitationSent={getSentFriendInvitations}
             getGroups={getGroups}
+          />
+        );
+      case "CashSettlementRequests":
+        return (
+          <CashSettlementRequests
+            sentSettlementRequests={sentSettlementRequests}
+            setSentSettlementRequests={setSentSettlementRequests}
+            sentSettlementRequestsLoading={loading.sentSettlementRequests}
           />
         );
       default:
@@ -288,7 +319,9 @@ function Dashboard() {
                       ? groups
                       : title == "Invitations"
                         ? invitations
-                        : title == "Settlements" ? settlements : []
+                        : title == "Settlements"
+                          ? settlements
+                          : []
                 }
                 isLoading={
                   title == "Friends"
