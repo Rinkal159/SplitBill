@@ -121,21 +121,23 @@ export default function AllExpenses() {
 
                   {/* Person */}
                   <div className="w-32">
-                    {balance !== 0 && (
-                      <p className="text-xs text-slate-400 font-medium">
-                        {balance > 0 ? "to" : balance < 0 ? "from" : ""}
-                      </p>
-                    )}
+                    {balance != 0 ? (
+                      <div>
+                        <p className="text-xs text-slate-400 font-medium">
+                          {balance > 0 ? "to" : balance < 0 ? "from" : ""}
+                        </p>
 
-                    <p
-                      className={`mt-0.5 truncate text-sm font-medium text-slate-700 ${expense.your_settlements.length === 1 ? "font-medium text-slate-700" : "font-normal text-black"}`}
-                    >
-                      {expense.your_settlements.length === 1
-                        ? expense.your_settlements[0].to_user.name
-                        : expense.your_settlements.length > 1
-                          ? "Multiple people"
-                          : ""}
-                    </p>
+                        <p
+                          className={`mt-0.5 truncate text-sm font-medium text-slate-700 ${expense.your_settlements.length === 1 ? "font-medium text-slate-700" : "font-normal text-black"}`}
+                        >
+                          {expense.your_settlements.length === 1
+                            ? expense.your_settlements[0].to_user.name
+                            : expense.your_settlements.length > 1
+                              ? "Multiple people"
+                              : ""}
+                        </p>
+                      </div>
+                    ) : <span>-</span>}
                   </div>
                 </div>
               </div>
