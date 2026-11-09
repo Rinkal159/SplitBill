@@ -869,9 +869,9 @@ async def delete_group_api(
     for splits in expense_groups:
         settlement_groups = await get_settlement_groups(splits=splits, db=db)
 
-        creditors = []
-        debtors = []
-        get_creditors_debtors(
+        creditors = {}
+        debtors = {}
+        _, _ = get_creditors_debtors(
             splits=splits,
             creditors=creditors,
             debtors=debtors,
@@ -940,9 +940,9 @@ async def leave_group_api(
         for splits in expense_groups:
             settlement_groups = await get_settlement_groups(splits=splits, db=db)
 
-            creditors = []
-            debtors = []
-            get_creditors_debtors(
+            creditors = {}
+            debtors = {}
+            _, _ = get_creditors_debtors(
                 splits=splits,
                 creditors=creditors,
                 debtors=debtors,
@@ -1077,9 +1077,9 @@ async def remove_group_member_api(
         for splits in expense_groups:
             settlement_groups = await get_settlement_groups(splits=splits, db=db)
 
-            creditors = []
-            debtors = []
-            get_creditors_debtors(
+            creditors = {}
+            debtors = {}
+            _, _ = get_creditors_debtors(
                 splits=splits,
                 creditors=creditors,
                 debtors=debtors,

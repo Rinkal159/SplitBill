@@ -14,21 +14,27 @@ async def get_friend_balances(expense_ids, db, current_user):
     for splits in expense_groups:
         settlement_groups = await get_settlement_groups(splits=splits, db=db)
 
-        creditors = []
-        debtors = []
-        get_creditors_debtors(
+        creditors = {}
+        debtors = {}
+        _, _ = get_creditors_debtors(
             splits=splits,
             settlement_groups=settlement_groups,
             creditors=creditors,
             debtors=debtors,
         )
 
-        i = 0
-        j = 0
+        creditor_ids = list(creditors)
+        debtor_ids = list(debtors)
+
+        i = 0  # creditor
+        j = 0  # debtor
 
         while i < len(creditors) and j < len(debtors):
-            creditor = creditors[i]
-            debtor = debtors[j]
+            creditor_id = creditor_ids[i]
+            debtor_id = debtor_ids[j]
+
+            creditor = creditors[creditor_id]
+            debtor = debtors[debtor_id]
 
             creditor_balance = creditor["balance"]
             debtor_balance = abs(debtor["balance"])
