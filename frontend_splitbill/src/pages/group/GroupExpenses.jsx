@@ -7,6 +7,7 @@ import GroupDetails from "./GroupDetails";
 import Loading from "../loading/Loading";
 import getBackendError from "../../utils/getBackendError";
 import formatAmount from "../../utils/formatAmount";
+import GroupSettlement from "../settlement/GroupSettlement";
 
 function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
   const { user } = useContext(AuthContext);
@@ -17,6 +18,7 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
 
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
   const [showGroupDetailsModal, setShowGroupDetailsModal] = useState(false);
+  const [showSettlementModal, setShowSettlementModal] = useState(false);
 
   // loading
   const [loading, setLoading] = useState(true);
@@ -26,7 +28,7 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
 
   const getGroupExpenses = async () => {
     try {
-      const res = await api.get(`/expenses/groups/${group.id}`);
+      const res = await api.get(`/expenses/groups/${group.id}?limit=99`);
       setExpenses(res.data);
       setLoading(false);
     } catch (error) {
@@ -107,7 +109,7 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
         )}
 
         {expenses.total_balance < 0 && (
-          <button className="invitation-btn edit-text edit-btn-shadow py-2 px-4 mx-2">
+          <button onClick={() => setShowSettlementModal(true)} className="invitation-btn edit-text edit-btn-shadow py-2 px-4 mx-2">
             Settle up
           </button>
         )}
@@ -422,6 +424,15 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
           getGroups={getGroups}
           prevGroup={group}
           setReceivedGroup={setGroup}
+        />
+      )}
+
+      {showSettlementModal && (
+        <GroupSettlement
+          group={group}
+          expenses={expenses}
+          onClose={() => setShowSettlementModal(false)}
+          onSettlementRequestSent={getGroupExpenses}
         />
       )}
     </div>
