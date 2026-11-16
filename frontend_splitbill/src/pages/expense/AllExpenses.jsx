@@ -5,11 +5,21 @@ import { AuthContext } from "../../context/AuthProvider.jsx";
 import Loading from "../loading/Loading.jsx";
 import getBackendError from "../../utils/getBackendError.js";
 import formatAmount from "../../utils/formatAmount.js";
+import ExpenseSettlement from "../settlement/ExpenseSettlement.jsx";
 
-export default function AllExpenses() {
+export default function AllExpenses({ loadSentSettlementReuqests, loadDashboardData }) {
   const { user } = useContext(AuthContext);
   const [expenses, setExpenses] = useState({});
   const [openExpense, setOpenExpense] = useState(null);
+
+  // settlement
+  const [showExpensewiseSettlementModal, setShowExpensewiseSettlementModal] =
+    useState(null);
+
+  const [
+    expensewiseParticipantsYouBorrowedMoney,
+    setExpensewiseParticipantsYouBorrowedMoney,
+  ] = useState([]);
 
   // loading
   const [loading, setLoading] = useState(true);
@@ -20,7 +30,7 @@ export default function AllExpenses() {
   const getExpenses = async () => {
     try {
       const response = await api.get("/expenses");
-      setExpenses(response.data); // object
+      setExpenses(response.data);
       setLoading(false);
     } catch (error) {
       setLoading(true);
@@ -128,16 +138,18 @@ export default function AllExpenses() {
                         </p>
 
                         <p
-                          className={`mt-0.5 truncate text-sm font-medium text-slate-700 ${expense.your_settlements.length === 1 ? "font-medium text-slate-700" : "font-normal text-black"}`}
+                          className={`mt-0.5 truncate text-sm font-medium text-slate-700 ${expense.your_actual_settlements.length === 1 ? "font-medium text-slate-700" : "font-normal text-black"}`}
                         >
-                          {expense.your_settlements.length === 1
-                            ? expense.your_settlements[0].to_user.name
-                            : expense.your_settlements.length > 1
+                          {expense.your_actual_settlements.length === 1
+                            ? expense.your_actual_settlements[0].to_user.name
+                            : expense.your_actual_settlements.length > 1
                               ? "Multiple people"
                               : ""}
                         </p>
                       </div>
-                    ) : <span>-</span>}
+                    ) : (
+                      <span>-</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -195,17 +207,17 @@ export default function AllExpenses() {
                     Expense splits :
                   </h1>
 
-                  {expense.your_settlements.length === 0 &&
-                    expense.other_settlements.length === 0 && (
+                  {expense.your_actual_settlements.length === 0 &&
+                    expense.others_actual_settlements.length === 0 && (
                       <p className="pt-2 text-sm italic text-slate-400">
                         There are no other settlements for this expense.
                       </p>
                     )}
 
                   {/* Your settlements */}
-                  {expense.your_settlements.length > 0 && (
+                  {expense.your_actual_settlements.length > 0 && (
                     <ul className="space-y-1 pt-1">
-                      {expense.your_settlements.map((your) => (
+                      {expense.your_actual_settlements.map((your) => (
                         <div
                           className="flex gap-2 items-center"
                           key={your.to_user.id}
@@ -236,12 +248,6 @@ export default function AllExpenses() {
                                 {your.to_user.name}
                               </span>
                             </li>
-                            {your.amount < 0 &&
-                              expenses.friend_balances[your.to_user.id] < 0 && (
-                                <button className="invitation-btn accept-text accept-btn-shadow">
-                                  Settle up individually
-                                </button>
-                              )}
                           </div>
                         </div>
                       ))}
@@ -249,9 +255,9 @@ export default function AllExpenses() {
                   )}
 
                   {/* Other settlements */}
-                  {expense.other_settlements.length > 0 && (
+                  {expense.others_actual_settlements.length > 0 && (
                     <ul className="space-y-2 pt-2">
-                      {expense.other_settlements.map((other) => (
+                      {expense.others_actual_settlements.map((other) => (
                         <li
                           className="flex items-center gap-2 text-sm text-slate-600"
                           key={other.from_user.id + other.to_user.id}
@@ -297,17 +303,22 @@ export default function AllExpenses() {
                       </button>
                     )}
 
-                    {expense.your_balance < 0 &&
-                      expense.your_settlements.every(
-                        (your) => expenses.friend_balances[your.to_user.id] < 0,
-                      ) && (
-                        <button
-                          onClick={(e) => e.stopPropagation()}
-                          className="invitation-btn accept-text accept-btn-shadow"
-                        >
-                          Settle up
-                        </button>
-                      )}
+                    {expense.your_balance < 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpensewiseParticipantsYouBorrowedMoney(
+                            expense.your_settlements,
+                          );
+                          setShowExpensewiseSettlementModal({
+                            expense: expense.expense,
+                          });
+                        }}
+                        className="invitation-btn accept-text accept-btn-shadow"
+                      >
+                        Settle up
+                      </button>
+                    )}
 
                     {user.id == expense.expense.created_by && (
                       <button
@@ -324,6 +335,19 @@ export default function AllExpenses() {
           );
         })}
       </div>
+
+      {showExpensewiseSettlementModal && (
+        <ExpenseSettlement
+          expenseId={showExpensewiseSettlementModal.expense.id}
+          expenseTitle={showExpensewiseSettlementModal.expense.title}
+          onClose={() => setShowExpensewiseSettlementModal(null)}
+          participants={expensewiseParticipantsYouBorrowedMoney}
+          setExpenseLoading={setLoading}
+          loadExpenses={getExpenses}
+          loadSentSettlementReuqests={loadSentSettlementReuqests}
+          loadDashboardData={loadDashboardData}
+        />
+      )}
     </div>
   );
 }
