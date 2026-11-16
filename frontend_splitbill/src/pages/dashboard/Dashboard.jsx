@@ -155,7 +155,6 @@ function Dashboard() {
   const getSentSettlementRequests = async () => {
     try {
       const res = await api.get("/settlements/requests/sent");
-      console.log(res.data);
       setSentSettlementRequests(res.data);
       setLoading((prevLoading) => ({
         ...prevLoading,
@@ -252,9 +251,7 @@ function Dashboard() {
           />
         );
       case "AllExpenses":
-        return <AllExpenses />;
-      case "FriendExpenses":
-        return <FriendExpenses friend={selectedFriend} loadSentSettlementReuqests={getSentSettlementRequests} />;
+        return <AllExpenses loadSentSettlementReuqests={getSentSettlementRequests} loadDashboardData={getDashboardData} />;
       case "Friends":
         return (
           <Friends
@@ -269,12 +266,24 @@ function Dashboard() {
             setActiveSubvalue={setActiveSubValue}
           />
         );
+      case "FriendExpenses":
+        return (
+          <FriendExpenses
+            key={`friend-${selectedFriend?.id}`}
+            friend={selectedFriend}
+            loadSentSettlementReuqests={getSentSettlementRequests}
+            loadDashboardData={getDashboardData}
+          />
+        );
       case "GroupExpenses":
         return (
           <GroupExpenses
+            key={`group-${selectedGroup?.id}`}
             receivedGroup={selectedGroup}
             onInvitationSent={getSentFriendInvitations}
             getGroups={getGroups}
+            loadSentSettlementReuqests={getSentSettlementRequests}
+            loadDashboardData={getDashboardData}
           />
         );
       case "CashSettlementRequests":
@@ -344,7 +353,11 @@ function Dashboard() {
 
         {/* main box */}
         <main className="flex flex-col w-full max-w-2xl border border-blue-100/60 shadow-xl shadow-blue-100/80 mt-4 rounded-2xl">
-          {loading.dashboard ? <Loading msg={"Dashboard"} /> : renderContent()}
+          {loading.dashboard && contentRenderer === "Dashboard" ? (
+            <Loading msg={"Dashboard"} />
+          ) : (
+            renderContent()
+          )}
         </main>
 
         {/* right sidebar */}
