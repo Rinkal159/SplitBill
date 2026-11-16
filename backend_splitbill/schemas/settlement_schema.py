@@ -34,6 +34,22 @@ class GroupSettlementCreate(Base):
     settlement_date: date
 
 
+class IndividualSettlementCreate(Base):
+    to_user: Annotated[int, Field(gt=0)]
+    amount: Annotated[Decimal, Field(gt=0, max_digits=10, decimal_places=2)]
+    payment_method: Annotated[str, Field(max_length=30)] = "CASH"
+    note: Annotated[str | None, Field(max_length=1500)] = None
+    settlement_date: date
+
+
+class ExpenseSettlementCreate(Base):
+    expense_id: Annotated[int, Field(gt=0)]
+    settlements: Annotated[list[GroupSettlementItem], Field(min_length=1)]
+    payment_method: Annotated[str, Field(max_length=30)] = "CASH"
+    note: Annotated[str | None, Field(max_length=1500)] = None
+    settlement_date: date
+
+
 class SettlementUser(Base):
     id: int
     name: str
