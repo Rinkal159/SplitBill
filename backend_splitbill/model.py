@@ -373,10 +373,10 @@ class ExpenseSplits(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     expense_id: Mapped[int] = mapped_column(
-        ForeignKey("expenses.id", onupdate="CASCADE", ondelete="CASCADE")
+        ForeignKey("expenses.id", onupdate="CASCADE", ondelete="CASCADE"), index=True
     )
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"), index=True
     )
     share_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     paid_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
