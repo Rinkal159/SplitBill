@@ -25,9 +25,12 @@ from backend_splitbill.model import (
     Settlement,
     SettlementSplits,
     SettlementStatus,
+    User,
 )
 from backend_splitbill.schemas.settlement_schema import (
+    ExpenseSettlementCreate as ExpenseSettlementCreateSchema,
     GroupSettlementCreate as GroupSettlementCreateSchema,
+    IndividualSettlementCreate as IndividualSettlementCreateSchema,
     SettlementCreate as SettlementCreateSchema,
     SettlementRequestResponse as SettlementRequestResponseSchema,
     SettlementResponse as SettlementResponseSchema,
@@ -329,6 +332,256 @@ async def _allocate_settlement_splits(
         )
 
     return created_splits, settled_details
+
+
+@settlements_router.get("/expenses/{expense_id}/participants")
+async def get_expense_settlement_participants(
+    expense_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    expense_groups = await get_expense_groups([expense_id], db, newest_first=False)
+    if not expense_groups:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found"
+        )
+
+    splits = expense_groups[0]
+    participant_ids = {split.user_id for split in splits}
+    if current_user.id not in participant_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a participant in this expense",
+        )
+
+    result = await db.execute(select(User).where(User.id.in_(participant_ids)))
+    users = {user.id: user for user in result.scalars().all()}
+    participants = []
+    for user_id in participant_ids:
+        if user_id == current_user.id:
+            continue
+        debt_amount = await _pairwise_debt(splits, current_user.id, user_id, db)
+        if debt_amount > 0:
+            user = users[user_id]
+            participants.append(
+                {
+                    "id": user.id,
+                    "name": user.name,
+                    "profile_picture_path": user.profile_picture_path,
+                    "debt_amount": debt_amount,
+                }
+            )
+    return participants
+
+
+@settlements_router.get("/expenses/{expense_id}/participants/{participant_id}")
+async def get_expense_settlement_participant(
+    expense_id: int,
+    participant_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    expense_groups = await get_expense_groups([expense_id], db, newest_first=False)
+    if not expense_groups:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found"
+        )
+
+    splits = expense_groups[0]
+    participant_ids = {split.user_id for split in splits}
+    if current_user.id not in participant_ids or participant_id not in participant_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You and the selected user must participate in this expense",
+        )
+    if participant_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot settle with yourself",
+        )
+
+    debt_amount = await _pairwise_debt(
+        splits, current_user.id, participant_id, db
+    )
+    if debt_amount <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You do not owe this participant for the selected expense",
+        )
+
+    result = await db.execute(select(User).where(User.id == participant_id))
+    participant = result.scalars().one_or_none()
+    if participant is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found"
+        )
+    return {
+        "id": participant.id,
+        "name": participant.name,
+        "profile_picture_path": participant.profile_picture_path,
+        "debt_amount": debt_amount,
+    }
+
+
+@settlements_router.post(
+    "/expenses",
+    response_model=list[SettlementRequestResponseSchema],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_expense_settlement_requests(
+    payload: ExpenseSettlementCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    user_ids = [item.to_user for item in payload.settlements]
+    if current_user.id in user_ids or len(set(user_ids)) != len(user_ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Choose each other expense participant once",
+        )
+
+    created = []
+    try:
+        for item in payload.settlements:
+            available_debt, effective_group_id = await _get_request_scope_debt(
+                from_user=current_user,
+                to_user_id=item.to_user,
+                expense_id=payload.expense_id,
+                group_id=None,
+                db=db,
+            )
+            if available_debt <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"You do not owe user {item.to_user} for this expense",
+                )
+            if item.amount > available_debt:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Settlement amount for user {item.to_user} exceeds the remaining debt",
+                )
+
+            settlement = Settlement(
+                expense_id=payload.expense_id,
+                group_id=effective_group_id,
+                from_user=current_user.id,
+                to_user=item.to_user,
+                amount=item.amount,
+                payment_method=payload.payment_method,
+                note=payload.note,
+                settlement_date=payload.settlement_date,
+                status=SettlementStatus.PENDING,
+            )
+            settlement.payer = current_user
+            db.add(settlement)
+            await db.flush()
+            expense_groups = await _get_split_groups_for_settlement(settlement, db)
+            created_splits, _ = await _allocate_settlement_splits(
+                settlement, expense_groups, db
+            )
+            if not created_splits:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="No outstanding debt was found for a selected participant",
+                )
+            created.append(settlement)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    return [await _get_settlement(item.id, db) for item in created]
+
+
+@settlements_router.post(
+    "/individual",
+    response_model=list[SettlementRequestResponseSchema],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_individual_settlement_request(
+    payload: IndividualSettlementCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if current_user.id == payload.to_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot settle with yourself.",
+        )
+
+    await is_your_friend(db, current_user, payload.to_user)
+    friend_data = await get_friend_settlement_data(
+        friend_id=payload.to_user, db=db, current_user=current_user
+    )
+    available_debt = abs(friend_data["individual_balance"])
+    if friend_data["individual_balance"] >= 0:
+        available_debt = Decimal("0")
+    if available_debt <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You do not owe this user for individual expenses",
+        )
+    if payload.amount > available_debt:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Settlement amount cannot be greater than the remaining individual debt",
+        )
+
+    expense_debts = sorted(
+        [
+            entry
+            for entry in friend_data["settlements"]
+            if entry["expense"].group_id is None
+            and entry["your_expensewise_balance_with_friend"] < 0
+        ],
+        key=lambda entry: (entry["expense"].expense_date, entry["expense"].id),
+    )
+
+    remaining_amount = payload.amount
+    created = []
+    try:
+        for entry in expense_debts:
+            if remaining_amount <= 0:
+                break
+            amount = min(
+                abs(entry["your_expensewise_balance_with_friend"]), remaining_amount
+            )
+            settlement = Settlement(
+                expense_id=entry["expense"].id,
+                group_id=None,
+                from_user=current_user.id,
+                to_user=payload.to_user,
+                amount=amount,
+                payment_method=payload.payment_method,
+                note=payload.note,
+                settlement_date=payload.settlement_date,
+                status=SettlementStatus.PENDING,
+            )
+            settlement.payer = current_user
+            db.add(settlement)
+            await db.flush()
+            created_splits, _ = await _allocate_settlement_splits(
+                settlement, [entry["splits"]], db
+            )
+            if not created_splits:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="The individual debt changed before settlement could be allocated",
+                )
+            created.append(settlement)
+            remaining_amount -= amount
+
+        if remaining_amount > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="The remaining individual debt no longer covers this request",
+            )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    return [await _get_settlement(item.id, db) for item in created]
 
 
 # * create settlement
