@@ -7,11 +7,30 @@ import Loading from "../loading/Loading";
 import formatAmount from "../../utils/formatAmount";
 import getBackendError from "../../utils/getBackendError";
 import Error from "../error/Error";
-import Settlement from "../settlement/Settlement";
+import FriendSettlement from "../settlement/FriendSettlement";
+import ExpenseSettlement from "../settlement/ExpenseSettlement";
 
-function FriendExpenses({ friend, loadSentSettlementReuqests }) {
+const settlementGroupRequests = new Map();
+
+async function loadSettlementGroups(friendId, refresh = false) {
+  if (refresh || !settlementGroupRequests.has(friendId)) {
+    const request = api
+      .get(`/expenses/groups/debt/${friendId}`)
+      .then((response) => response.data)
+      .catch((error) => {
+        settlementGroupRequests.delete(friendId);
+        throw error;
+      });
+    settlementGroupRequests.set(friendId, request);
+  }
+  return settlementGroupRequests.get(friendId);
+}
+
+function FriendExpenses({ friend, loadSentSettlementReuqests, loadDashboardData }) {
   const { user } = useContext(AuthContext);
   const [expenses, setExpenses] = useState({});
+  const [settlementGroups, setSettlementGroups] = useState([]);
+  const [settlementGroupsLoading, setSettlementGroupsLoading] = useState(true);
   const [openExpense, setOpenExpense] = useState(null);
 
   // loading
@@ -25,7 +44,16 @@ function FriendExpenses({ friend, loadSentSettlementReuqests }) {
   const [filteredExpenses, setFilteredExpenses] = useState([]);
 
   // settle up
-  const [showSettlementModal, setShowSettlementModal] = useState(false);
+  const [showFriendSettlementModal, setShowFriendSettlementModal] =
+      useState(false);
+  const [showExpensewiseSettlementModal, setShowExpensewiseSettlementModal] =
+    useState(false);
+
+  const [
+    expensewiseParticipantsYouBorrowedMoney,
+    setExpensewiseParticipantsYouBorrowedMoney,
+  ] = useState([]);
+
 
   const getExpenses = async () => {
     try {
@@ -39,10 +67,24 @@ function FriendExpenses({ friend, loadSentSettlementReuqests }) {
     }
   };
 
+  const getSettlementGroups = async (friendId, refresh = false) => {
+    setSettlementGroupsLoading(true);
+    setSettlementGroups([]);
+    try {
+      const groups = await loadSettlementGroups(friendId, refresh);
+      setSettlementGroups(groups);
+    } catch (error) {
+      setBackErrors(getBackendError(error));
+    } finally {
+      setSettlementGroupsLoading(false);
+    }
+  };
+
   // run getExpenses whenever user clicks on any friend, which means when friend.id changes, this function runs
   useEffect(() => {
     if (friend?.id) {
       getExpenses();
+      getSettlementGroups(friend.id);
     }
   }, [friend?.id]);
 
@@ -119,7 +161,7 @@ function FriendExpenses({ friend, loadSentSettlementReuqests }) {
         </div>
         {balance < 0 && (
           <button
-            onClick={() => setShowSettlementModal(true)}
+            onClick={() => setShowFriendSettlementModal(true)}
             className="invitation-btn edit-text edit-btn-shadow py-2 px-4 mx-2"
           >
             Settle up
@@ -212,7 +254,7 @@ function FriendExpenses({ friend, loadSentSettlementReuqests }) {
 
                         {/* amount */}
                         <p
-                          className={`text-base text-lg font-semibold ${
+                          className={` text-lg font-semibold ${
                             balance_with_friend > 0
                               ? "accept-text"
                               : balance_with_friend < 0
@@ -221,9 +263,7 @@ function FriendExpenses({ friend, loadSentSettlementReuqests }) {
                           }`}
                         >
                           {Math.abs(balance_with_friend) === 0 ? (
-                            <span className="text-sm text-slate-600">
-                              Settled
-                            </span>
+                            <span className="text-sm accept-text">Settled</span>
                           ) : (
                             "₹" + formatAmount(Math.abs(balance_with_friend))
                           )}
@@ -237,12 +277,12 @@ function FriendExpenses({ friend, loadSentSettlementReuqests }) {
                             ? "to"
                             : balance_with_friend < 0
                               ? "from"
-                              : ""}
+                              : "with"}
                         </p>
                         <p
-                          className={`mt-0.5 truncate text-sm font-medium text-slate-700`}
+                          className={`truncate ${balance_with_friend === 0 ? "mt-1" : "mt-0.5"} text-sm font-medium text-slate-700`}
                         >
-                          {balance_with_friend != 0 ? friend.name : "-"}
+                          {friend.name}
                         </p>
                       </div>
                     </div>
@@ -267,7 +307,10 @@ function FriendExpenses({ friend, loadSentSettlementReuqests }) {
 
                       {expense.expense.group && (
                         <p className="pb-1 text-sm font-medium text-slate-500">
-                          Group: <span className="text-slate-600">{expense.expense.group.name}</span>
+                          Group:{" "}
+                          <span className="text-slate-600">
+                            {expense.expense.group.name}
+                          </span>
                         </p>
                       )}
 
@@ -307,17 +350,17 @@ function FriendExpenses({ friend, loadSentSettlementReuqests }) {
                         Expense splits :
                       </h1>
 
-                      {expense.your_settlements.length === 0 &&
-                        expense.other_settlements.length === 0 && (
+                      {expense.your_actual_settlements.length === 0 &&
+                        expense.others_actual_settlements.length === 0 && (
                           <p className="pt-2 text-sm italic text-slate-400">
                             There are no other settlements for this expense.
                           </p>
                         )}
 
                       {/* Your settlements */}
-                      {expense.your_settlements.length > 0 && (
+                      {expense.your_actual_settlements.length > 0 && (
                         <ul className="space-y-1 pt-1">
-                          {expense.your_settlements.map((your) => (
+                          {expense.your_actual_settlements.map((your) => (
                             <div
                               className="flex gap-2 items-center"
                               key={your.to_user.id}
@@ -348,18 +391,6 @@ function FriendExpenses({ friend, loadSentSettlementReuqests }) {
                                     {your.to_user.name}
                                   </span>
                                 </li>
-                                {your.amount < 0 && activeFilter === "all"
-                                  ? expenses.friend_balances[your.to_user.id] <
-                                      0 && (
-                                      <button className="invitation-btn accept-text accept-btn-shadow">
-                                        Settle up individually
-                                      </button>
-                                    )
-                                  : your.amount < 0 && (
-                                      <button className="invitation-btn accept-text accept-btn-shadow">
-                                        Settle up individually
-                                      </button>
-                                    )}
                               </div>
                             </div>
                           ))}
@@ -367,9 +398,9 @@ function FriendExpenses({ friend, loadSentSettlementReuqests }) {
                       )}
 
                       {/* Other settlements */}
-                      {expense.other_settlements.length > 0 && (
+                      {expense.others_actual_settlements.length > 0 && (
                         <ul className="space-y-2 pt-2">
-                          {expense.other_settlements.map((other) => (
+                          {expense.others_actual_settlements.map((other) => (
                             <li
                               className="flex items-center gap-2 text-sm text-slate-600"
                               key={other.from_user.id + other.to_user.id}
@@ -415,26 +446,22 @@ function FriendExpenses({ friend, loadSentSettlementReuqests }) {
                           </button>
                         )}
 
-                        {balance_with_friend < 0 && activeFilter === "all"
-                          ? expense.your_settlements.every(
-                              (your) =>
-                                expenses.friend_balances[your.to_user.id] < 0,
-                            ) && (
-                              <button
-                                onClick={(e) => e.stopPropagation()}
-                                className="invitation-btn accept-text accept-btn-shadow"
-                              >
-                                Settle up
-                              </button>
-                            )
-                          : balance_with_friend < 0 && (
-                              <button
-                                onClick={(e) => e.stopPropagation()}
-                                className="invitation-btn accept-text accept-btn-shadow"
-                              >
-                                Settle up
-                              </button>
-                            )}
+                        {balance_with_friend < 0 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpensewiseParticipantsYouBorrowedMoney(
+                                expense.your_settlements,
+                              );
+                              setShowExpensewiseSettlementModal({
+                                expense: expense.expense,
+                              });
+                            }}
+                            className="invitation-btn accept-text accept-btn-shadow"
+                          >
+                            Settle up
+                          </button>
+                        )}
 
                         {user.id == expense.expense.created_by && (
                           <button
@@ -459,16 +486,33 @@ function FriendExpenses({ friend, loadSentSettlementReuqests }) {
         )}
       </div>
 
-      {showSettlementModal && (
-        <Settlement
-          onClose={() => setShowSettlementModal(false)}
+      {showFriendSettlementModal && (
+        <FriendSettlement
+          onClose={() => setShowFriendSettlementModal(false)}
           toUser={friend}
           settlementValue={formatAmount(Math.abs(balance))}
           overallValue={expenses.total_balance}
-          onSettlementRequestSent={getExpenses}
+          individualValue={expenses.individual_balance}
+          loadFriendExpenses={getExpenses}
           setFriendExpensesLoading={setLoading}
           loadSentSettlementReuqests={loadSentSettlementReuqests}
-          shouldIntializeWithOverall={activeFilter !== "group expenses" && activeFilter !== "individual expenses"}
+          activeFilter={activeFilter}
+          settlementGroups={settlementGroups}
+          settlementGroupsLoading={settlementGroupsLoading}
+          loadDashboardData={loadDashboardData}
+        />
+      )}
+
+      {showExpensewiseSettlementModal && (
+        <ExpenseSettlement
+          expenseId={showExpensewiseSettlementModal.expense.id}
+          expenseTitle={showExpensewiseSettlementModal.expense.title}
+          participants={expensewiseParticipantsYouBorrowedMoney}
+          onClose={() => setShowExpensewiseSettlementModal(null)}
+          setExpenseLoading={setLoading}
+          loadExpenses={getExpenses}
+          loadSentSettlementReuqests={loadSentSettlementReuqests}
+          loadDashboardData={loadDashboardData}
         />
       )}
     </div>
