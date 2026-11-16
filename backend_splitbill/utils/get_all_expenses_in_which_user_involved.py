@@ -12,6 +12,8 @@ async def get_all_expenses_in_which_user_involved(
     expense_groups = await get_expense_groups(
         expense_ids=expense_ids, db=db, newest_first=True
     )
+    all_splits = [split for splits in expense_groups for split in splits]
+    settlement_groups = await get_settlement_groups(all_splits, db)
 
     settlements = []
     total_balance = Decimal("0")
@@ -20,7 +22,6 @@ async def get_all_expenses_in_which_user_involved(
     for splits in expense_groups:
         users_involed = [split.user_id for split in splits]
 
-        settlement_groups = await get_settlement_groups(splits, db)
         expense = splits[0].expense
 
         creditors = {}
@@ -36,7 +37,8 @@ async def get_all_expenses_in_which_user_involved(
         j = 0  # debtor
 
         your_logs = []
-        other_logs = []
+        your_actual_logs = []
+        others_actual_logs = []
         your_balance = Decimal("0")
         balances_by_user = {}
 
@@ -65,10 +67,16 @@ async def get_all_expenses_in_which_user_involved(
 
             # you're a creditor then you "lent"
             if creditor["user"].id == current_user.id:
-                your_logs.append(
+                your_actual_logs.append(
                     {
                         "to_user": UserDetailSchema.model_validate(debtor["user"]),
                         "amount": transfer,
+                    }
+                )
+                your_logs.append(
+                    {
+                        "to_user": UserDetailSchema.model_validate(adjusted_debtor["user"]), # type: ignore
+                        "amount": balance_transfer,
                     }
                 )
                 your_balance += balance_transfer
@@ -84,10 +92,16 @@ async def get_all_expenses_in_which_user_involved(
 
             # you're a debtor then you "borrowed"
             elif debtor["user"].id == current_user.id:
-                your_logs.append(
+                your_actual_logs.append(
                     {
                         "to_user": UserDetailSchema.model_validate(creditor["user"]),
                         "amount": -transfer,
+                    }
+                )
+                your_logs.append(
+                    {
+                        "to_user": UserDetailSchema.model_validate(adjusted_creditor["user"]), # type: ignore
+                        "amount": -balance_transfer,
                     }
                 )
                 your_balance -= balance_transfer
@@ -103,7 +117,7 @@ async def get_all_expenses_in_which_user_involved(
 
             # other settlements
             else:
-                other_logs.append(
+                others_actual_logs.append(
                     {
                         "from_user": UserDetailSchema.model_validate(debtor["user"]),
                         "to_user": UserDetailSchema.model_validate(creditor["user"]),
@@ -135,7 +149,8 @@ async def get_all_expenses_in_which_user_involved(
             {
                 "expense": expense,
                 "your_settlements": your_logs,
-                "other_settlements": other_logs,
+                "your_actual_settlements": your_actual_logs,
+                "others_actual_settlements": others_actual_logs,
                 "your_balance": your_balance,
                 "_balances_by_user": balances_by_user,
             }

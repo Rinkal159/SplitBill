@@ -28,6 +28,8 @@ async def get_friend_settlement_data(
     expense_groups = await get_expense_groups(
         expense_ids=expense_ids["expense_ids"], db=db, newest_first=True
     )
+    all_splits = [split for splits in expense_groups for split in splits]
+    settlement_groups = await get_settlement_groups(all_splits, db)
 
     settlements = []
     friend_balances = {}
@@ -38,7 +40,6 @@ async def get_friend_settlement_data(
     for splits in expense_groups:
         users_involed = [split.user_id for split in splits]
 
-        settlement_groups = await get_settlement_groups(splits, db)
         expense = splits[0].expense
 
         creditors = {}
@@ -54,7 +55,8 @@ async def get_friend_settlement_data(
         j = 0  # debtor
 
         your_logs = []
-        other_logs = []
+        your_actual_logs = []
+        others_actual_logs = []
         expensewise_balance = Decimal("0")
 
         while i < len(original_creditors) and j < len(original_debtors):
@@ -107,10 +109,16 @@ async def get_friend_settlement_data(
                 creditor["user"].id == current_user.id
                 and debtor["user"].id == friend_id
             ):
-                your_logs.append(
+                your_actual_logs.append(
                     {
                         "to_user": UserDetailSchema.model_validate(debtor["user"]),
                         "amount": transfer,
+                    }
+                )
+                your_logs.append(
+                    {
+                        "to_user": UserDetailSchema.model_validate(adjusted_debtor["user"]), # type: ignore
+                        "amount": balance_transfer,
                     }
                 )
                 total_balance += balance_transfer
@@ -131,10 +139,16 @@ async def get_friend_settlement_data(
                 debtor["user"].id == current_user.id
                 and creditor["user"].id == friend_id
             ):
-                your_logs.append(
+                your_actual_logs.append(
                     {
                         "to_user": UserDetailSchema.model_validate(creditor["user"]),
                         "amount": -transfer,
+                    }
+                )
+                your_logs.append(
+                    {
+                        "to_user": UserDetailSchema.model_validate(adjusted_creditor["user"]), # type: ignore
+                        "amount": -balance_transfer,
                     }
                 )
                 total_balance -= balance_transfer
@@ -152,7 +166,7 @@ async def get_friend_settlement_data(
 
             # other settlements
             else:
-                other_logs.append(
+                others_actual_logs.append(
                     {
                         "from_user": UserDetailSchema.model_validate(debtor["user"]),
                         "to_user": UserDetailSchema.model_validate(creditor["user"]),
@@ -188,7 +202,8 @@ async def get_friend_settlement_data(
                 "expense": expense,
                 "splits": splits,
                 "your_settlements": your_logs,
-                "other_settlements": other_logs,
+                "your_actual_settlements": your_actual_logs,
+                "others_actual_settlements": others_actual_logs,
                 "your_expensewise_balance_with_friend": expensewise_balance,
             }
         )
