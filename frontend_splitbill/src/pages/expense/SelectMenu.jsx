@@ -13,6 +13,8 @@ export default function SelectMenu({
   isCreatable = false,
   onCreateOption,
   formatOptionLabel,
+  autoFocus = false,
+  defaultMenuIsOpen = false,
   additionalInfo = "",
   required = true
 }) {
@@ -175,6 +177,8 @@ export default function SelectMenu({
         isMulti={isMultiSelect}
         options={options}
         formatOptionLabel={formatOptionLabel}
+        autoFocus={autoFocus}
+        defaultMenuIsOpen={defaultMenuIsOpen}
         value={value}
         onChange={handleChange}
         isSearchable
