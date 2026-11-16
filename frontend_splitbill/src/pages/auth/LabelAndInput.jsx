@@ -24,7 +24,13 @@ function LabelAndInput({
         type={type}
         id={field}
         name={field}
-        value={typeof person === "string" ? person : person[field]}
+        value={
+          person == null
+            ? null
+            : typeof person === "string"
+              ? person
+              : person[field]
+        }
         autoComplete="off"
         required={required}
         placeholder={placeholder}
