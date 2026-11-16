@@ -199,6 +199,8 @@ async def get_all_borrowing_and_lendings_api(
     expense_groups = await get_expense_groups(
         expense_ids=expense_ids, db=db, newest_first=True
     )
+    all_splits = [split for splits in expense_groups for split in splits]
+    settlement_groups = await get_settlement_groups(all_splits, db)
 
     general_balance = {}
     borrowings = {}
@@ -236,8 +238,6 @@ async def get_all_borrowing_and_lendings_api(
             }
 
     for splits in expense_groups:
-        settlement_groups = await get_settlement_groups(splits, db)
-
         creditors = {}
         debtors = {}
         _, _ = get_creditors_debtors(splits, creditors, debtors, settlement_groups)
