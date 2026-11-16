@@ -23,18 +23,18 @@ function Navbar() {
           SplitBill
         </h1>
 
-        <div className="grid auto-cols-max grid-flow-col items-center gap-4">
+        <div className="grid auto-cols-max grid-flow-col items-center gap-3">
           <Link
             to="/expenses/add"
-            className="btn !mt-0 !bg-gradient-to-r from-sky-600/80 via-sky-500/80 to-blue-500 px-4"
+            className="btn invitation-btn !mt-0 edit-text edit-btn-shadow px-4"
           >
             Add Expense
           </Link>
-          <button className="btn !mt-0 !bg-gradient-to-r from-sky-600/80 via-sky-500/80 to-blue-500 px-4">
+          <button className="btn !mt-0 invitation-btn edit-text edit-btn-shadow px-4">
             Settle up
           </button>
           <img
-            className="w-14 h-14 rounded-full object-cover overflow-hidden border border-slate-200/80 bg-slate-50"
+            className="w-14 h-14 ml-3 rounded-full object-cover overflow-hidden border border-slate-200/80 bg-slate-50"
             src={user.profile_picture_path}
             alt="Profie picture"
           />
