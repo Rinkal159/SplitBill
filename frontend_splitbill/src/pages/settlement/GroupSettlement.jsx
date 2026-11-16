@@ -4,28 +4,46 @@ import formatAmount from "../../utils/formatAmount";
 import getBackendError from "../../utils/getBackendError";
 import SelectMenu from "../expense/SelectMenu";
 import Error from "../error/Error";
+import getTodayDate from "../../utils/getTodayDate";
+import CashConfirmationModal from "./CashConfirmationModal";
+import LabelAndInput from "../auth/LabelAndInput";
 
 function GroupSettlement({
   group,
   expenses,
   onClose,
-  onSettlementRequestSent,
+  loadGroupExpenses,
+  setGroupExpenseLoading,
+  loadSentSettlementReuqests,
+  loadDashboardData
 }) {
-  const today = new Date();
-  const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  // today local date
+  const localToday = getTodayDate();
+
+  // payload
+  const [settlement, setSettlement] = useState({
+    group_id: group.id,
+    settlement_date: localToday,
+    payment_method: "cash",
+    note: null,
+  });
+
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [amounts, setAmounts] = useState({});
-  const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [note, setNote] = useState("");
-  const [settlementDate, setSettlementDate] = useState(localToday);
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
+
+  // loading
+  const [settleLoading, setSettleLoading] = useState(false);
+
+  // error
+  const [backErrors, setBackErrors] = useState({});
+
+  // cash confirmation modal
   const [showCashConfirmation, setShowCashConfirmation] = useState(false);
 
   const membersById = useMemo(() => {
     const result = {};
     expenses.expenses.forEach((entry) => {
-      entry.your_settlements.forEach((settlement) => {
+      entry.your_actual_settlements.forEach((settlement) => {
         result[settlement.to_user.id] = settlement.to_user;
       });
     });
@@ -52,28 +70,35 @@ function GroupSettlement({
       });
       return updated;
     });
-    setErrors({});
+    setBackErrors({});
   };
 
   const sendRequests = async () => {
     try {
-      setLoading(true);
+      setSettleLoading(true);
+      setShowCashConfirmation(false);
+
       const settlements = selectedMembers.map((member) => ({
         to_user: member.value,
         amount: Number(amounts[member.value]),
       }));
+
       await api.post("/settlements/groups", {
-        group_id: group.id,
+        group_id: settlement.group_id,
         settlements,
-        payment_method: paymentMethod,
-        note: note || null,
-        settlement_date: settlementDate,
+        settlement_date: settlement.settlement_date,
+        payment_method: settlement.payment_method,
+        note: settlement.note,
       });
-      await onSettlementRequestSent();
+
       onClose();
+      setGroupExpenseLoading(true);
+      await loadGroupExpenses();
+      await loadSentSettlementReuqests();
+      await loadDashboardData();
     } catch (error) {
-      setErrors(getBackendError(error));
-      setLoading(false);
+      setBackErrors(getBackendError(error));
+      setSettleLoading(false);
       setShowCashConfirmation(false);
     }
   };
@@ -87,25 +112,22 @@ function GroupSettlement({
       );
     });
     if (selectedMembers.length === 0) {
-      setErrors({ error: ["Choose at least one member to settle with"] });
+      setBackErrors({ error: ["Choose at least one member to settle with"] });
       return;
     }
     if (invalid) {
-      setErrors({
+      setBackErrors({
         error: [
           "Each amount must be greater than zero and no more than that member's debt",
         ],
       });
       return;
     }
-    setErrors({});
-    if (paymentMethod.toLowerCase() === "cash") setShowCashConfirmation(true);
+    setBackErrors({});
+    if (settlement.payment_method.toLowerCase() === "cash")
+      setShowCashConfirmation(true);
     else sendRequests();
   };
-
-
-  console.log("SELECTED MEMBERS: ", selectedMembers);
-  
 
   return (
     <div className="outer-modal">
@@ -149,7 +171,9 @@ function GroupSettlement({
                   className="flex w-fit min-w-[150px] max-w-full flex-col items-center gap-1 rounded-lg bg-sky-50 px-0 py-4 text-center"
                 >
                   <div className="flex items-baseline justify-center gap-1 border-b-2 border-dashed border-slate-300">
-                    <span className="text-4xl font-medium text-slate-700">₹</span>
+                    <span className="text-4xl font-medium text-slate-700">
+                      ₹
+                    </span>
                     <input
                       id={`settlement-amount-${member.value}`}
                       onChange={(event) =>
@@ -172,66 +196,78 @@ function GroupSettlement({
                   <p className="max-w-full truncate text-sm font-medium text-slate-600">
                     {member.label}
                   </p>
+                  <p className="text-xs text-slate-500">
+                    Owes ₹{formatAmount(member.debtAmount)}
+                  </p>
                 </div>
               ))}
             </div>
           )}
 
-          {Object.keys(errors).length > 0 && (
-            <Error errors={errors.error} type={errors.type} />
+          {Object.keys(backErrors).length > 0 && (
+            <Error errors={backErrors.error} type={backErrors.type} />
           )}
 
           {selectedMembers.length > 0 && (
             <div>
               <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="form-lbl" htmlFor="group-settlement-date">
-                    Settlement date <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    className="form-input py-2"
-                    id="group-settlement-date"
-                    type="date"
-                    value={settlementDate}
-                    onChange={(event) => setSettlementDate(event.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="form-lbl" htmlFor="group-payment-method">
-                    Payment method
-                  </label>
-                  <input
-                    className="form-input py-2"
-                    id="group-payment-method"
-                    maxLength={30}
-                    placeholder="e.g. UPI, cash"
-                    value={paymentMethod}
-                    onChange={(event) => setPaymentMethod(event.target.value)}
-                  />
-                </div>
+                <LabelAndInput
+                  type={"date"}
+                  field={"settlement-date"}
+                  labelValue={"Settlement date"}
+                  required={true}
+                  person={settlement.settlement_date}
+                  placeholder={"Enter Settlement date"}
+                  handleEvent={(e) =>
+                    setSettlement((prev) => ({
+                      ...prev,
+                      settlement_date: e.target.value,
+                    }))
+                  }
+                  showError={false}
+                />
+                <LabelAndInput
+                  type={"text"}
+                  field={"payment-method"}
+                  labelValue={"Payment method"}
+                  required={false}
+                  person={settlement.payment_method}
+                  placeholder={"e.g. UPI, cash"}
+                  handleEvent={(e) =>
+                    setSettlement((prev) => ({
+                      ...prev,
+                      payment_method: e.target.value,
+                    }))
+                  }
+                  showError={false}
+                />
               </div>
 
-              <div className="w-full space-y-1">
-                <label className="form-lbl" htmlFor="group-settlement-note">
-                  Note
-                </label>
-                <textarea
-                  className="form-input min-h-16 resize-y"
-                  id="group-settlement-note"
-                  maxLength={1500}
-                  placeholder="Add a note (optional)"
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
+              <div className="w-full my-4">
+                <LabelAndInput
+                  type={"text"}
+                  field={"settlement-note"}
+                  labelValue={"Settlement note"}
+                  required={false}
+                  person={settlement.note}
+                  placeholder={"Add a note (optional)"}
+                  handleEvent={(e) =>
+                    setSettlement((prev) => ({
+                      ...prev,
+                      note: e.target.value,
+                    }))
+                  }
+                  showError={false}
                 />
               </div>
 
               <button
-                className="btn invitation-btn edit-text edit-btn-shadow self-center px-4 py-1.5"
+                className="btn text-md disabled:text-sky-700 border disabled:border-2 disabled:border-blue-200 invitation-btn edit-text edit-btn-shadow self-center px-4 py-1.5"
                 type="submit"
-                disabled={loading}
+                disabled={settleLoading}
+                onClick={submit}
               >
-                {loading ? "Sending settlement requests..." : "Settle up"}
+                {settleLoading ? "Sending settlement requests..." : "Settle up"}
               </button>
             </div>
           )}
@@ -239,36 +275,28 @@ function GroupSettlement({
       </div>
 
       {showCashConfirmation && (
-        <div className="outer-modal">
-          <div
-            className="inner-modal max-w-sm space-y-4 p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => setShowCashConfirmation(false)}
-              className="cancel-icon"
-            >
-              ✕
-            </button>
-            <h1 className="glittery-shadow text-center text-lg font-semibold">
-              Cash settlement confirmation
-            </h1>
-            <p className="text-center text-sm leading-6 text-slate-600">
-              Send cash settlement requests to{" "}
-              {selectedMembers
-                .map(
-                  (member) =>
-                    `${member.label} (₹${formatAmount(amounts[member.value])})`,
-                )
-                .join(", ")}
-              ? Each person will be asked to confirm receipt.
-            </p>
-            <button type="button" onClick={sendRequests} className="w-full btn">
-              Got it
-            </button>
-          </div>
-        </div>
+        <CashConfirmationModal
+          onClose={() => setShowCashConfirmation(false)}
+          firstMessage={
+            <>
+              <p className="text-center text-sm leading-6 text-slate-600">
+                Send cash settlement requests to{" "}
+                {selectedMembers.map((member, index) => (
+                  <span key={member.value}>
+                    {index > 0 && ", "}
+                    <span className="font-semibold">{member.label}</span> -
+                    <span className="font-semibold">₹{formatAmount(amounts[member.value])}</span>
+                  </span>
+                ))}
+                ?
+              </p>
+            </>
+          }
+          secondMessage={
+            "They’ll be notified and asked to confirm receipt. The settlement will be marked complete once they confirm."
+          }
+          onSubmit={sendRequests}
+        />
       )}
     </div>
   );
