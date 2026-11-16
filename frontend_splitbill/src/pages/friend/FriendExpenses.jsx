@@ -58,6 +58,8 @@ function FriendExpenses({ friend, loadSentSettlementReuqests, loadDashboardData 
   const getExpenses = async () => {
     try {
       const response = await api.get(`expenses/friends/${friend.id}`);
+      console.log(response.data);
+      
       setExpenses(response.data);
       setLoading(false);
     } catch (error) {

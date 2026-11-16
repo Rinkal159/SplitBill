@@ -12,7 +12,7 @@ import getBackendError from "../../utils/getBackendError"
 function Login() {
   const { setUser } = useContext(AuthContext);
   const [person, setPerson] = new useState({
-    email: "rinkalsingapuri@gmail.com",
+    email: "rinkal@gmail.com",
     password: "Rinkal@1234",
   });
 

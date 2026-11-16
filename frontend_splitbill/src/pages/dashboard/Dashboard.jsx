@@ -166,12 +166,12 @@ function Dashboard() {
   };
 
   useEffect(() => {
-    getDashboardData();
     getFriends();
     getGroups();
     getSentFriendInvitations();
     getSentGroupInvitations();
     getSentSettlementRequests();
+    getDashboardData();
   }, []);
 
   const [activeSubvalue, setActiveSubValue] = useState(null);

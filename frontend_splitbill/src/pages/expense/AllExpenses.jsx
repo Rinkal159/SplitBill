@@ -223,7 +223,7 @@ export default function AllExpenses({ loadSentSettlementReuqests, loadDashboardD
                           key={your.to_user.id}
                         >
                           <img
-                            className="small-img !rounded-full"
+                            className="small-img"
                             src={user.profile_picture_path}
                             alt={user.name}
                           />
@@ -263,7 +263,7 @@ export default function AllExpenses({ loadSentSettlementReuqests, loadDashboardD
                           key={other.from_user.id + other.to_user.id}
                         >
                           <img
-                            className="small-img !rounded-full "
+                            className="small-img"
                             src={other.from_user.profile_picture_path}
                             alt={other.from_user.name}
                           />

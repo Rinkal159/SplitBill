@@ -74,8 +74,6 @@ function GroupExpenses({
     return <Loading msg={receivedGroup.name} />;
   }
 
-  console.log("You borrowed: ", expensewiseParticipantsYouBorrowedMoney);
-  
 
   return (
     <div className="p-6">

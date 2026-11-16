@@ -20,8 +20,6 @@ function ExpenseSettlement({
   loadSentSettlementReuqests,
   loadDashboardData
 }) {
-  console.log("Participants: ", participants);
-  
   // today local date
   const localToday = getTodayDate();
 
