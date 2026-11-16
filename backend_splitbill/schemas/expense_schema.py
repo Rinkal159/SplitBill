@@ -88,7 +88,8 @@ class SettlementSchema(Base):
 class ExpenseSchema(Base):
     expense: ExpenseDetail
     your_settlements: list[YourSettlementSchema]
-    other_settlements: list[SettlementSchema]
+    your_actual_settlements: list[YourSettlementSchema]
+    others_actual_settlements: list[SettlementSchema]
     your_balance: Decimal
 
 
@@ -121,17 +122,11 @@ class BorrowingsAndLendings(Base):
 
 
 # * FriendsSettlements
-class ExpenseSplitDetail(Base):
-    user: UserDetail
-    share_amount: Decimal
-    paid_amount: Decimal
-
-
 class FriendExpenseSchema(Base):
     expense: ExpenseDetail
-    splits: list[ExpenseSplitDetail]
     your_settlements: list[YourSettlementSchema]
-    other_settlements: list[SettlementSchema]
+    your_actual_settlements: list[YourSettlementSchema]
+    others_actual_settlements: list[SettlementSchema]
     your_expensewise_balance_with_friend: Decimal
 
 
