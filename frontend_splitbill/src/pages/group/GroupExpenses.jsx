@@ -8,8 +8,15 @@ import Loading from "../loading/Loading";
 import getBackendError from "../../utils/getBackendError";
 import formatAmount from "../../utils/formatAmount";
 import GroupSettlement from "../settlement/GroupSettlement";
+import ExpenseSettlement from "../settlement/ExpenseSettlement";
 
-function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
+function GroupExpenses({
+  receivedGroup,
+  onInvitationSent,
+  getGroups,
+  loadSentSettlementReuqests,
+  loadDashboardData
+}) {
   const { user } = useContext(AuthContext);
   const [expenses, setExpenses] = useState({});
   const [openExpense, setOpenExpense] = useState(null);
@@ -18,7 +25,15 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
 
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
   const [showGroupDetailsModal, setShowGroupDetailsModal] = useState(false);
-  const [showSettlementModal, setShowSettlementModal] = useState(false);
+  const [showGroupSettlementModal, setShowGroupSettlementModal] =
+    useState(false);
+  const [showExpensewiseSettlementModal, setShowExpensewiseSettlementModal] =
+    useState(null);
+
+  const [
+    expensewiseParticipantsYouBorrowedMoney,
+    setExpensewiseParticipantsYouBorrowedMoney,
+  ] = useState([]);
 
   // loading
   const [loading, setLoading] = useState(true);
@@ -58,6 +73,9 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
   if (loading) {
     return <Loading msg={receivedGroup.name} />;
   }
+
+  console.log("You borrowed: ", expensewiseParticipantsYouBorrowedMoney);
+  
 
   return (
     <div className="p-6">
@@ -109,12 +127,14 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
         )}
 
         {expenses.total_balance < 0 && (
-          <button onClick={() => setShowSettlementModal(true)} className="invitation-btn edit-text edit-btn-shadow py-2 px-4 mx-2">
+          <button
+            onClick={() => setShowGroupSettlementModal(true)}
+            className="invitation-btn edit-text edit-btn-shadow py-2 px-4 mx-2"
+          >
             Settle up
           </button>
         )}
       </header>
-
 
       {/* expenses */}
       <div className="space-y-3">
@@ -207,11 +227,11 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
                       )}
 
                       <p
-                        className={`mt-0.5 truncate text-sm font-medium text-slate-700 ${expense.your_settlements.length === 1 ? "font-medium text-slate-700" : "font-normal text-black"}`}
+                        className={`mt-0.5 truncate text-sm font-medium text-slate-700 ${expense.your_actual_settlements.length === 1 ? "font-medium text-slate-700" : "font-normal text-black"}`}
                       >
-                        {expense.your_settlements.length === 1
-                          ? expense.your_settlements[0].to_user.name
-                          : expense.your_settlements.length > 1
+                        {expense.your_actual_settlements.length === 1
+                          ? expense.your_actual_settlements[0].to_user.name
+                          : expense.your_actual_settlements.length > 1
                             ? "Multiple people"
                             : ""}
                       </p>
@@ -272,17 +292,17 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
                       Expense splits :
                     </h1>
 
-                    {expense.your_settlements.length === 0 &&
-                      expense.other_settlements.length === 0 && (
+                    {expense.your_actual_settlements.length === 0 &&
+                      expense.others_actual_settlements.length === 0 && (
                         <p className="pt-2 text-sm italic text-slate-400">
                           There are no other settlements for this expense.
                         </p>
                       )}
 
                     {/* Your settlements */}
-                    {expense.your_settlements.length > 0 && (
+                    {expense.your_actual_settlements.length > 0 && (
                       <ul className="space-y-1 pt-1">
-                        {expense.your_settlements.map((your) => (
+                        {expense.your_actual_settlements.map((your) => (
                           <div
                             className="flex gap-2 items-center"
                             key={your.to_user.id}
@@ -313,13 +333,6 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
                                   {your.to_user.name}
                                 </span>
                               </li>
-                              {your.amount < 0 &&
-                                expenses.friend_balances[your.to_user.id] <
-                                  0 && (
-                                  <button className="invitation-btn accept-text accept-btn-shadow">
-                                    Settle up individually
-                                  </button>
-                                )}
                             </div>
                           </div>
                         ))}
@@ -327,9 +340,9 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
                     )}
 
                     {/* Other settlements */}
-                    {expense.other_settlements.length > 0 && (
+                    {expense.others_actual_settlements.length > 0 && (
                       <ul className="space-y-2 pt-2">
-                        {expense.other_settlements.map((other) => (
+                        {expense.others_actual_settlements.map((other) => (
                           <li
                             className="flex items-center gap-2 text-sm text-slate-600"
                             key={other.from_user.id + other.to_user.id}
@@ -375,18 +388,22 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
                         </button>
                       )}
 
-                      {expense.your_balance < 0 &&
-                        expense.your_settlements.every(
-                          (your) =>
-                            expenses.friend_balances[your.to_user.id] < 0,
-                        ) && (
-                          <button
-                            onClick={(e) => e.stopPropagation()}
-                            className="invitation-btn accept-text accept-btn-shadow"
-                          >
-                            Settle up
-                          </button>
-                        )}
+                      {expense.your_balance < 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpensewiseParticipantsYouBorrowedMoney(
+                              expense.your_settlements,
+                            );
+                            setShowExpensewiseSettlementModal({
+                              expense: expense.expense,
+                            });
+                          }}
+                          className="invitation-btn accept-text accept-btn-shadow"
+                        >
+                          Settle up
+                        </button>
+                      )}
 
                       {user.id == expense.expense.created_by && (
                         <button
@@ -427,12 +444,28 @@ function GroupExpenses({ receivedGroup, onInvitationSent, getGroups }) {
         />
       )}
 
-      {showSettlementModal && (
+      {showGroupSettlementModal && (
         <GroupSettlement
           group={group}
           expenses={expenses}
-          onClose={() => setShowSettlementModal(false)}
-          onSettlementRequestSent={getGroupExpenses}
+          onClose={() => setShowGroupSettlementModal(false)}
+          loadGroupExpenses={getGroupExpenses}
+          setGroupExpenseLoading={setLoading}
+          loadSentSettlementReuqests={loadSentSettlementReuqests}
+          loadDashboardData={loadDashboardData}
+        />
+      )}
+
+      {showExpensewiseSettlementModal && (
+        <ExpenseSettlement
+          expenseId={showExpensewiseSettlementModal.expense.id}
+          expenseTitle={showExpensewiseSettlementModal.expense.title}
+          onClose={() => setShowExpensewiseSettlementModal(null)}
+          participants={expensewiseParticipantsYouBorrowedMoney}
+          setExpenseLoading={setLoading}
+          loadExpenses={getGroupExpenses}
+          loadSentSettlementReuqests={loadSentSettlementReuqests}
+          loadDashboardData={loadDashboardData}
         />
       )}
     </div>
