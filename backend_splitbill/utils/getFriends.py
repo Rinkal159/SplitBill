@@ -5,14 +5,11 @@ from backend_splitbill.auth.authentication import get_current_user
 from sqlalchemy import select
 
 from backend_splitbill.model import User
+from backend_splitbill.utils.get_friend_ids import get_friend_ids
 
 
 async def getFriends(db, current_user):
-    # get all the friend ids
-    friends_ids = {
-        *[friend.friend_id for friend in current_user.sent_friendships],
-        *[friend.user_id for friend in current_user.received_friendships],
-    }
+    friends_ids = await get_friend_ids(db, current_user.id)
 
     if not friends_ids:
         return []
