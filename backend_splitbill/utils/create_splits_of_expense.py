@@ -3,6 +3,8 @@ from backend_splitbill.model import ExpenseSplits
 
 
 async def create_expense_splits(db, expense, participant_ids, expense_data):
+    split_values = {}
+
     # should "equally" pay
     if expense.split_method == "equal":
         share = (expense.total_amount / Decimal(len(participant_ids))).quantize(
@@ -16,12 +18,18 @@ async def create_expense_splits(db, expense, participant_ids, expense_data):
         share_amounts = {
             split.user_id: split.amount for split in expense.expense_splits  # type: ignore
         }
+        split_values = {
+            split.user_id: split.amount for split in expense.expense_splits  # type: ignore
+        }
 
     # should pay "percentage" wise
     else:
         share_amounts = {
             split.user_id: expense.total_amount * split.percentage / Decimal("100")  # type: ignore
             for split in expense.expense_splits  # type: ignore
+        }
+        split_values = {
+            split.user_id: split.percentage for split in expense.expense_splits  # type: ignore
         }
 
     # each participant actually paid
@@ -33,5 +41,6 @@ async def create_expense_splits(db, expense, participant_ids, expense_data):
             user_id=participant_id,
             share_amount=share_amounts[participant_id],
             paid_amount=paid_amounts[participant_id],
+            split_value=split_values.get(participant_id),
         )
         db.add(new_split)
