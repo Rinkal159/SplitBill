@@ -2,6 +2,7 @@ from fastapi import HTTPException, status
 from backend_splitbill.utils.validate_participants_are_group_members import (
     are_group_members,
 )
+from backend_splitbill.utils.get_friend_ids import get_friend_ids
 
 
 async def validate_participants(
@@ -25,12 +26,8 @@ async def validate_participants(
         )
 
     if group_id is None:
-        # get all the friend ids
-        friends_ids = {
-            current_user.id,
-            *[friend.friend_id for friend in current_user.sent_friendships],
-            *[friend.user_id for friend in current_user.received_friendships],
-        }
+        friends_ids = await get_friend_ids(db, current_user.id)
+        friends_ids.add(current_user.id)
 
         # user is a pariticipant but not a friend
         invalid_ids = participant_ids_set - friends_ids
