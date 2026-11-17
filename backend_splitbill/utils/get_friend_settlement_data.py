@@ -8,6 +8,7 @@ from backend_splitbill.utils.get_creditors_debtors import get_creditors_debtors
 from decimal import Decimal
 from backend_splitbill.utils.get_settlement_groups import get_settlement_groups
 from backend_splitbill.utils.get_expenses_with_friend import get_expenses_with_friend
+from backend_splitbill.utils.get_expense_summary_data import get_expense_summary_data
 
 from backend_splitbill.model import User
 from backend_splitbill.schemas.expense_schema import UserDetail as UserDetailSchema
@@ -18,6 +19,9 @@ async def get_friend_settlement_data(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
     expense_ids=None,
+    include_expense_summary=True,
+    page=None,
+    limit=None,
 ):
 
     friend = await db.execute(select(User).where(User.id == friend_id))
@@ -30,6 +34,11 @@ async def get_friend_settlement_data(
     )
     all_splits = [split for splits in expense_groups for split in splits]
     settlement_groups = await get_settlement_groups(all_splits, db)
+    summary_data = (
+        await get_expense_summary_data(expense_groups, db, current_user)
+        if include_expense_summary
+        else {}
+    )
 
     settlements = []
     friend_balances = {}
@@ -205,6 +214,7 @@ async def get_friend_settlement_data(
                 "your_actual_settlements": your_actual_logs,
                 "others_actual_settlements": others_actual_logs,
                 "your_expensewise_balance_with_friend": expensewise_balance,
+                **summary_data.get(expense.id, {}),
             }
         )
 
@@ -245,6 +255,13 @@ async def get_friend_settlement_data(
         if debtor["your_expensewise_balance_with_friend"] == 0:
             j += 1
 
+    total_count = len(settlements)
+    if page is not None and limit is not None:
+        skip = (page - 1) * limit
+        settlements = settlements[skip : skip + limit]
+    else:
+        skip = 0
+
     return {
         "friend": friend.scalars().one_or_none(),
         "settlements": settlements,
@@ -252,4 +269,8 @@ async def get_friend_settlement_data(
         "total_balance": total_balance,
         "group_balance": group_balance,
         "individual_balance": individual_balance,
+        "page": page,
+        "skip": skip,
+        "limit": limit,
+        "has_more": page is not None and limit is not None and skip + len(settlements) < total_count,
     }
