@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Annotated, Literal
 from decimal import Decimal
 from datetime import date, datetime
+from backend_splitbill.model import SettlementStatus
 
 
 class Base(BaseModel):
@@ -72,6 +73,7 @@ class ExpenseDetail(Base):
     created_at: datetime
     created_by: int
     creator: UserDetail
+    split_method: str | None = None
 
 
 class YourSettlementSchema(Base):
@@ -85,8 +87,29 @@ class SettlementSchema(Base):
     amount: Decimal
 
 
+class ExpenseParticipantSplitSchema(Base):
+    user: UserDetail
+    share_amount: Decimal
+    paid_amount: Decimal
+    split_value: Decimal | None = None
+
+
+class ExpenseSettlementHistorySchema(Base):
+    id: int
+    direction: Literal["PAID", "RECEIVED"]
+    counterparty: UserDetail
+    amount: Decimal
+    total_amount: Decimal
+    payment_method: str
+    settlement_date: date
+    status: SettlementStatus
+    note: str | None = None
+
+
 class ExpenseSchema(Base):
     expense: ExpenseDetail
+    expense_splits: list[ExpenseParticipantSplitSchema]
+    settlement_history: list[ExpenseSettlementHistorySchema]
     your_settlements: list[YourSettlementSchema]
     your_actual_settlements: list[YourSettlementSchema]
     others_actual_settlements: list[SettlementSchema]
@@ -124,6 +147,8 @@ class BorrowingsAndLendings(Base):
 # * FriendsSettlements
 class FriendExpenseSchema(Base):
     expense: ExpenseDetail
+    expense_splits: list[ExpenseParticipantSplitSchema]
+    settlement_history: list[ExpenseSettlementHistorySchema]
     your_settlements: list[YourSettlementSchema]
     your_actual_settlements: list[YourSettlementSchema]
     others_actual_settlements: list[SettlementSchema]
@@ -137,6 +162,10 @@ class FriendsSettlementsResponse(Base):
     total_balance: Decimal
     group_balance: Decimal
     individual_balance: Decimal
+    page: int | None = None
+    skip: int | None = None
+    limit: int | None = None
+    has_more: bool | None = None
 
 
 # * TotalBalanceWithFriend
