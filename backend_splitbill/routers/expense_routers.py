@@ -21,12 +21,11 @@ from backend_splitbill.utils.get_settlement_groups import get_settlement_groups
 from backend_splitbill.utils.get_all_expenses_in_which_user_involved import (
     get_all_expenses_in_which_user_involved,
 )
-from backend_splitbill.utils.friendship_checks import friendship_checks
 from backend_splitbill.services.cloudinary import (
     upload_picture_on_cloudinary,
     delete_picture_from_cloudinary,
 )
-from backend_splitbill.utils.get_friend_balances import get_friend_balances
+from backend_splitbill.utils.get_friend_ids import get_friend_ids
 from typing import Annotated
 from backend_splitbill.utils.is_your_friend import is_your_friend
 from backend_splitbill.utils.get_expenses_with_friend import get_expenses_with_friend
@@ -45,6 +44,7 @@ from backend_splitbill.schemas.expense_schema import (
     TotalBalanceWithFriend as TotalBalanceWithFriendSchema,
 )
 from backend_splitbill.schemas.group_schema import GroupDebt as GroupDebtSchema
+from backend_splitbill.schemas.pagination_schema import PaginatedResponse
 from backend_splitbill.model import (
     Friends,
     User,
@@ -89,6 +89,7 @@ async def add_expense_api(
         description=expense.description,
         note=expense.note,
         total_amount=expense.total_amount,
+        split_method=expense.split_method,
         expense_date=expense.expense_date,
         created_by=current_user.id,
     )
@@ -349,7 +350,7 @@ async def get_single_expense(
 async def get_all_expenses_api(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
-    page: int = 1,
+    page: Annotated[int, Query(ge=1)] = 1,
     limit: Annotated[int, Query(gt=0, lt=100)] = 10,
 ):
     skip = limit * (page - 1)
@@ -366,6 +367,7 @@ async def get_all_expenses_api(
         select(ExpenseSplits.expense_id)
         .where(ExpenseSplits.user_id == current_user.id)
         .distinct()
+        .order_by(ExpenseSplits.expense_id.desc())
         .offset(skip)
         .limit(limit)
     )
@@ -396,7 +398,7 @@ async def get_all_group_expenses_api(
     group_id: int,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
-    page: int = 1,
+    page: Annotated[int, Query(ge=1)] = 1,
     limit: Annotated[int, Query(gt=0, lt=100)] = 10,
 ):
 
@@ -440,6 +442,7 @@ async def get_all_group_expenses_api(
         select(Expense.id)
         .where(Expense.group_id == group_id)
         .distinct()
+        .order_by(Expense.id.desc())
         .offset(skip)
         .limit(limit)
     )
@@ -496,6 +499,7 @@ async def get_debt_groups_api(
             expense_ids={"expense_ids": expense_ids},
             db=db,
             current_user=current_user,
+            include_expense_summary=False,
         )
         if settlement_data["total_balance"] < Decimal("0"):
             debt_groups.append(
@@ -511,14 +515,40 @@ async def get_debt_groups_api(
 )
 async def get_friends_settlements_api(
     friend_id: int,
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    # friend settlement data
-    response = await friendship_checks(
-        db=db, current_user=current_user, friend_id=friend_id
+    try:
+        await is_your_friend(db, current_user, friend_id)
+        return await get_friend_settlement_data(
+            friend_id=friend_id,
+            db=db,
+            current_user=current_user,
+            include_expense_summary=True,
+            page=page,
+            limit=limit,
+        )
+    except HTTPException as error:
+        if error.status_code != status.HTTP_403_FORBIDDEN:
+            raise
+
+    shared_expenses = await get_expenses_with_friend(db, current_user, friend_id)
+    if not shared_expenses["expense_ids"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view expenses with a friend or a user who shares expenses with you",
+        )
+    return await get_friend_settlement_data(
+        friend_id=friend_id,
+        db=db,
+        current_user=current_user,
+        expense_ids=shared_expenses,
+        include_expense_summary=True,
+        page=page,
+        limit=limit,
     )
-    return response["friend_settlement_data"]
 
 
 # * get total balance with that friend
@@ -599,23 +629,29 @@ async def getTotalBalanceWithFriend(
 
 # * get total balance with all friends
 @expense_router.get(
-    "/friends/balances/all", response_model=list[TotalBalanceWithFriendSchema]
+    "/friends/balances/all", response_model=PaginatedResponse[TotalBalanceWithFriendSchema]
 )
 async def getTotalBalanceWithAllFriends(
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(ExpenseSplits.expense_id).where(ExpenseSplits.user_id == current_user.id)
-    )
-    expense_ids = result.scalars().all()
-
-    your_friends = {friend.friend_id for friend in current_user.sent_friendships} | {
-        friend.user_id for friend in current_user.received_friendships
-    }
+    all_friend_ids = sorted(await get_friend_ids(db, current_user.id))
+    total = len(all_friend_ids)
+    your_friends = all_friend_ids[(page - 1) * limit : page * limit]
 
     if not your_friends:
-        return []
+        return {"items": [], "page": page, "limit": limit, "has_more": False}
+
+    friend_expenses = select(ExpenseSplits.expense_id).where(ExpenseSplits.user_id.in_(your_friends))
+    result = await db.execute(
+        select(ExpenseSplits.expense_id).where(
+            ExpenseSplits.user_id == current_user.id,
+            ExpenseSplits.expense_id.in_(friend_expenses),
+        ).distinct()
+    )
+    expense_ids = result.scalars().all()
 
     # Fetch friend records for the IDs collected above.
     friend_result = await db.execute(select(User).where(User.id.in_(your_friends)))
@@ -694,7 +730,12 @@ async def getTotalBalanceWithAllFriends(
             if abs(debtor["balance"]) <= Decimal("0"):
                 j += 1
 
-    return list(balances.values())
+    return {
+        "items": list(balances.values()),
+        "page": page,
+        "limit": limit,
+        "has_more": page * limit < total,
+    }
 
 
 # * delete an expense
@@ -781,6 +822,7 @@ async def update_expense_api(
     existed_expense.description = expense.description  # type: ignore[call-args]
     existed_expense.note = expense.note  # type: ignore[call-args]
     existed_expense.total_amount = expense.total_amount
+    existed_expense.split_method = expense.split_method
     existed_expense.expense_date = expense.expense_date
 
     # creating expense history

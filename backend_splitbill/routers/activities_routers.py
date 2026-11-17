@@ -230,7 +230,7 @@ def create_activity_summary(row, current_user_id):
 async def get_activities_api(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
-    page: int = 1,
+    page: Annotated[int, Query(ge=1)] = 1,
     limit: Annotated[int, Query(gt=0, lt=100)] = 10,
     category: Literal[
         "ALL",

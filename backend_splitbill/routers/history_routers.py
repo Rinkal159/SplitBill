@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
+from typing import Annotated
 from backend_splitbill.database import get_db
 from backend_splitbill.auth.authentication import get_current_user
 
@@ -10,19 +11,25 @@ from backend_splitbill.schemas.history_schema import (
     SettlementHistoryResponse as SettlementHistoryResponseSchema,
     FriendsHistory as FriendsHistoryResponseSchema,
 )
+from backend_splitbill.schemas.pagination_schema import PaginatedResponse
 
 history_router = APIRouter(prefix="/api/history", tags=["History"])
 
 
 # * expense history
-@history_router.get("/expenses", response_model=list[ExpenseHistoryResponseSchema])
+@history_router.get("/expenses", response_model=PaginatedResponse[ExpenseHistoryResponseSchema])
 async def get_expense_history_api(
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
+    where = ExpenseHistory.performed_by == current_user.id
+    total = (await db.execute(select(func.count(ExpenseHistory.id)).where(where))).scalar_one()
     result = await db.execute(
         select(ExpenseHistory)
-        .where(ExpenseHistory.performed_by == current_user.id)
-        .order_by(ExpenseHistory.performed_at.desc())
+        .where(where)
+        .order_by(ExpenseHistory.performed_at.desc(), ExpenseHistory.id.desc())
+        .offset((page - 1) * limit).limit(limit)
     )
     existed_expense_history = result.scalars().all()
 
@@ -41,25 +48,25 @@ async def get_expense_history_api(
             }
         )
 
-    return actions
+    return {"items": actions, "page": page, "limit": limit, "has_more": page * limit < total}
 
 
 # * settlement history
 @history_router.get(
-    "/settlements", response_model=list[SettlementHistoryResponseSchema]
+    "/settlements", response_model=PaginatedResponse[SettlementHistoryResponseSchema]
 )
 async def get_settlement_history_api(
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
+    where = or_(Settlement.from_user == current_user.id, Settlement.to_user == current_user.id)
+    total = (await db.execute(select(func.count(Settlement.id)).where(where))).scalar_one()
     result = await db.execute(
         select(Settlement)
-        .where(
-            or_(
-                Settlement.from_user == current_user.id,
-                Settlement.to_user == current_user.id,
-            )
-        )
-        .order_by(Settlement.created_at.desc())
+        .where(where)
+        .order_by(Settlement.created_at.desc(), Settlement.id.desc())
+        .offset((page - 1) * limit).limit(limit)
     )
     existed_settlement_history = result.scalars().all()
 
@@ -83,23 +90,23 @@ async def get_settlement_history_api(
             }
         )
 
-    return settlements
+    return {"items": settlements, "page": page, "limit": limit, "has_more": page * limit < total}
 
 
 # * friends history
-@history_router.get("/friends", response_model=list[FriendsHistoryResponseSchema])
+@history_router.get("/friends", response_model=PaginatedResponse[FriendsHistoryResponseSchema])
 async def get_friends_history_api(
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
     db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
+    where = or_(FriendsHistory.sender_id == current_user.id, FriendsHistory.receiver_id == current_user.id)
+    total = (await db.execute(select(func.count(FriendsHistory.id)).where(where))).scalar_one()
     result = await db.execute(
         select(FriendsHistory)
-        .where(
-            or_(
-                FriendsHistory.sender_id == current_user.id,
-                FriendsHistory.receiver_id == current_user.id,
-            )
-        )
-        .order_by(FriendsHistory.performed_at.desc())
+        .where(where)
+        .order_by(FriendsHistory.performed_at.desc(), FriendsHistory.id.desc())
+        .offset((page - 1) * limit).limit(limit)
     )
     existed_friends_history = result.scalars().all()
 
@@ -122,4 +129,4 @@ async def get_friends_history_api(
             }
         )
 
-    return friends_history
+    return {"items": friends_history, "page": page, "limit": limit, "has_more": page * limit < total}
