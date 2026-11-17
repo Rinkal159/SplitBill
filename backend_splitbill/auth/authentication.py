@@ -5,6 +5,7 @@ from backend_splitbill.utils.raise_exception import raise_exception
 from fastapi import status, Cookie, Depends
 from backend_splitbill.database import get_db
 from sqlalchemy import select
+from sqlalchemy.orm import lazyload
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend_splitbill.model import User
 
@@ -40,7 +41,9 @@ async def get_current_user(token: str | None = Cookie(None), db: AsyncSession = 
     if not user_id:
         raise raise_exception(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(
+        select(User).options(lazyload("*")).where(User.id == user_id)
+    )
     user = result.scalars().one_or_none()
     
     if not user:
