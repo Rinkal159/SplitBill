@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from backend_splitbill.model import Settlement, SettlementSplits, SettlementStatus
 from collections import defaultdict
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import contains_eager, lazyload
 
 
 async def get_settlement_groups(splits, db):
@@ -11,7 +11,12 @@ async def get_settlement_groups(splits, db):
 
     result = await db.execute(
         select(SettlementSplits)
-        .options(selectinload(SettlementSplits.settlement))
+        .options(
+            lazyload("*"),
+            contains_eager(SettlementSplits.settlement).load_only(
+                Settlement.id, Settlement.to_user
+            ),
+        )
         .join(Settlement, SettlementSplits.settlement_id == Settlement.id)
         .where(
             SettlementSplits.split_id.in_(split_ids),
