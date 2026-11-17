@@ -1,6 +1,7 @@
 from backend_splitbill.utils.get_expense_groups import get_expense_groups
 from backend_splitbill.utils.get_settlement_groups import get_settlement_groups
 from backend_splitbill.utils.get_creditors_debtors import get_creditors_debtors
+from backend_splitbill.utils.get_expense_summary_data import get_expense_summary_data
 from backend_splitbill.schemas.expense_schema import UserDetail as UserDetailSchema
 from decimal import Decimal
 
@@ -14,6 +15,7 @@ async def get_all_expenses_in_which_user_involved(
     )
     all_splits = [split for splits in expense_groups for split in splits]
     settlement_groups = await get_settlement_groups(all_splits, db)
+    summary_data = await get_expense_summary_data(expense_groups, db, current_user)
 
     settlements = []
     total_balance = Decimal("0")
@@ -152,6 +154,7 @@ async def get_all_expenses_in_which_user_involved(
                 "your_actual_settlements": your_actual_logs,
                 "others_actual_settlements": others_actual_logs,
                 "your_balance": your_balance,
+                **summary_data[expense.id],
                 "_balances_by_user": balances_by_user,
             }
         )
