@@ -1,14 +1,25 @@
 from sqlalchemy import select
 from collections import defaultdict
-from backend_splitbill.model import ExpenseSplits
-from sqlalchemy.orm import selectinload
+from backend_splitbill.model import Expense, ExpenseSplits, Group
+from sqlalchemy.orm import lazyload, selectinload
 
 
 async def get_expense_groups(expense_ids, db, newest_first):
     # gettings all splits of all expense ids at once
     result = await db.execute(
         select(ExpenseSplits)
-        .options(selectinload(ExpenseSplits.user), selectinload(ExpenseSplits.expense))
+        .options(
+            lazyload("*"),
+            selectinload(ExpenseSplits.user).options(lazyload("*")),
+            selectinload(ExpenseSplits.expense).options(
+                lazyload("*"),
+                selectinload(Expense.creator).options(lazyload("*")),
+                selectinload(Expense.group).options(
+                    lazyload("*"),
+                    selectinload(Group.creator).options(lazyload("*")),
+                ),
+            ),
+        )
         .where(ExpenseSplits.expense_id.in_(expense_ids))
         .order_by(ExpenseSplits.expense_id)
     )
