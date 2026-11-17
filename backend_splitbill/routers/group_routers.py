@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from backend_splitbill.database import get_db
 from backend_splitbill.auth.authentication import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete
 from sqlalchemy.orm import selectinload
+from typing import Annotated
 from backend_splitbill.utils.get_member_settlement_data import (
     get_member_settlement_data,
 )
@@ -43,8 +44,43 @@ from backend_splitbill.schemas.group_schema import (
     ExpenseWithSpecificMemberResponse as ExpenseWithSpecificMemberResponseSchema,
     GroupsSentInvitations as GroupsSentInvitationsSchema,
 )
+from backend_splitbill.schemas.pagination_schema import PaginatedResponse
 
 group_router = APIRouter(prefix="/api/groups", tags=["Groups"])
+
+
+@group_router.get("/invitations/received/page", response_model=PaginatedResponse[ReceivedInvitationResponseSchema])
+async def get_received_group_invitations_page(
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user),
+):
+    base = select(GroupInvitation).join(Group).where(
+        GroupInvitation.invitee_id == current_user.id,
+        GroupInvitation.status == InvitationStatus.PENDING,
+        Group.is_deleted.is_(False),
+    )
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    result = await db.execute(base.options(selectinload(GroupInvitation.group), selectinload(GroupInvitation.inviter)).order_by(GroupInvitation.updated_at.desc(), GroupInvitation.id.desc()).offset((page - 1) * limit).limit(limit))
+    items = result.scalars().all()
+    return {"items": items, "page": page, "limit": limit, "has_more": page * limit < total}
+
+
+@group_router.get("/invitations/sent/page", response_model=PaginatedResponse[SentInvitationResposeSchema])
+async def get_sent_group_invitations_page(
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user),
+):
+    base = select(GroupInvitation).join(Group).where(
+        GroupInvitation.inviter_id == current_user.id,
+        GroupInvitation.status == InvitationStatus.PENDING,
+        Group.is_deleted.is_(False),
+    )
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    result = await db.execute(base.options(selectinload(GroupInvitation.group), selectinload(GroupInvitation.invitee)).order_by(GroupInvitation.updated_at.desc(), GroupInvitation.id.desc()).offset((page - 1) * limit).limit(limit))
+    items = result.scalars().all()
+    return {"items": items, "page": page, "limit": limit, "has_more": page * limit < total}
 
 
 # * create a group

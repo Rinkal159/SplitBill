@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 from decimal import Decimal
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Annotated
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import lazyload, selectinload
 from backend_splitbill.auth.authentication import get_current_user
 from backend_splitbill.database import get_db
 from backend_splitbill.utils.get_expense_groups import get_expense_groups
@@ -35,8 +36,35 @@ from backend_splitbill.schemas.settlement_schema import (
     SettlementRequestResponse as SettlementRequestResponseSchema,
     SettlementResponse as SettlementResponseSchema,
 )
+from backend_splitbill.schemas.pagination_schema import PaginatedResponse
 
 settlements_router = APIRouter(prefix="/api/settlements", tags=["Settlements"])
+
+
+@settlements_router.get("/requests/sent/page", response_model=PaginatedResponse[SettlementRequestResponseSchema])
+async def get_sent_settlement_requests_page(
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user),
+):
+    where = (Settlement.from_user == current_user.id, Settlement.status == SettlementStatus.PENDING)
+    total = (await db.execute(select(func.count(Settlement.id)).where(*where))).scalar_one()
+    result = await db.execute(_settlement_query().where(*where).order_by(Settlement.created_at.desc(), Settlement.id.desc()).offset((page - 1) * limit).limit(limit))
+    items = result.scalars().all()
+    return {"items": items, "page": page, "limit": limit, "has_more": page * limit < total}
+
+
+@settlements_router.get("/requests/received/page", response_model=PaginatedResponse[SettlementRequestResponseSchema])
+async def get_received_settlement_requests_page(
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user),
+):
+    where = (Settlement.to_user == current_user.id, Settlement.status == SettlementStatus.PENDING)
+    total = (await db.execute(select(func.count(Settlement.id)).where(*where))).scalar_one()
+    result = await db.execute(_settlement_query().where(*where).order_by(Settlement.created_at.desc(), Settlement.id.desc()).offset((page - 1) * limit).limit(limit))
+    items = result.scalars().all()
+    return {"items": items, "page": page, "limit": limit, "has_more": page * limit < total}
 
 
 @settlements_router.post(
@@ -111,8 +139,9 @@ async def create_group_settlement_requests(
 
 def _settlement_query():
     return select(Settlement).options(
-        selectinload(Settlement.payer),
-        selectinload(Settlement.receiver),
+        lazyload("*"),
+        selectinload(Settlement.payer).options(lazyload("*")),
+        selectinload(Settlement.receiver).options(lazyload("*")),
     )
 
 
@@ -216,7 +245,10 @@ async def _get_request_scope_debt(
 
     await is_your_friend(db, from_user, to_user_id)
     friend_data = await get_friend_settlement_data(
-        friend_id=to_user_id, db=db, current_user=from_user
+        friend_id=to_user_id,
+        db=db,
+        current_user=from_user,
+        include_expense_summary=False,
     )
     total_balance = friend_data["total_balance"]
     return (abs(total_balance) if total_balance < 0 else Decimal("0"), None)
@@ -248,7 +280,10 @@ async def _get_split_groups_for_settlement(settlement: Settlement, db: AsyncSess
         )
 
     data = await get_friend_settlement_data(
-        friend_id=settlement.to_user, db=db, current_user=payer
+        friend_id=settlement.to_user,
+        db=db,
+        current_user=payer,
+        include_expense_summary=False,
     )
     # Overall payments can cover both individual and group expenses. Allocate
     # them oldest-first so creation time breaks ties on the same expense date.
@@ -511,7 +546,10 @@ async def create_individual_settlement_request(
 
     await is_your_friend(db, current_user, payload.to_user)
     friend_data = await get_friend_settlement_data(
-        friend_id=payload.to_user, db=db, current_user=current_user
+        friend_id=payload.to_user,
+        db=db,
+        current_user=current_user,
+        include_expense_summary=False,
     )
     available_debt = abs(friend_data["individual_balance"])
     if friend_data["individual_balance"] >= 0:

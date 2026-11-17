@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from backend_splitbill.database import get_db
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend_splitbill.auth.authentication import get_current_user
 from decimal import Decimal
@@ -17,6 +17,7 @@ from backend_splitbill.schemas.friends_schema import (
     FriendProfileResponse as FriendProfileResponseSchema,
     FriendsName as FriendsNameSchema,
 )
+from backend_splitbill.schemas.pagination_schema import PaginatedResponse
 from backend_splitbill.model import (
     User,
     Invitation,
@@ -27,8 +28,42 @@ from backend_splitbill.model import (
     Group,
     GroupMember,
 )
+from fastapi import Query
+from typing import Annotated
 
 friends_router = APIRouter(prefix="/api/friends", tags=["Friends"])
+
+
+@friends_router.get("/invitations/received/page", response_model=PaginatedResponse[InvitationReceivedResponseSchema])
+async def get_received_friend_invitations_page(
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user),
+):
+    base = select(Invitation).where(
+        Invitation.invitee_id == current_user.id,
+        Invitation.status == InvitationStatus.PENDING,
+    )
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    result = await db.execute(base.order_by(Invitation.created_at.desc(), Invitation.id.desc()).offset((page - 1) * limit).limit(limit))
+    items = result.scalars().all()
+    return {"items": items, "page": page, "limit": limit, "has_more": page * limit < total}
+
+
+@friends_router.get("/invitations/sent/page", response_model=PaginatedResponse[InvitationSentResponseSchema])
+async def get_sent_friend_invitations_page(
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user),
+):
+    base = select(Invitation).where(
+        Invitation.inviter_id == current_user.id,
+        Invitation.status == InvitationStatus.PENDING,
+    )
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    result = await db.execute(base.order_by(Invitation.created_at.desc(), Invitation.id.desc()).offset((page - 1) * limit).limit(limit))
+    items = result.scalars().all()
+    return {"items": items, "page": page, "limit": limit, "has_more": page * limit < total}
 
 
 # * send invitation via email or mobile number
