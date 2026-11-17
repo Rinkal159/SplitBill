@@ -317,6 +317,7 @@ class Expense(Base):
     attachment: Mapped[str] = mapped_column(String(500), nullable=True)  # public id
     note: Mapped[str] = mapped_column(String(1000), nullable=True)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    split_method: Mapped[str | None] = mapped_column(String(20), nullable=True)
     expense_date: Mapped[date] = mapped_column(Date)
     created_by: Mapped[int] = mapped_column(
         ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE")
@@ -380,6 +381,7 @@ class ExpenseSplits(Base):
     )
     share_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     paid_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    split_value: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
