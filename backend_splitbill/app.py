@@ -9,6 +9,7 @@ from backend_splitbill.routers import (
     profile_routers,
 )
 from backend_splitbill.routers import settlements_routers
+from backend_splitbill.routers import dashboard_routers
 from backend_splitbill.exception_handling.exception_handlers import handlers
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -35,6 +36,7 @@ app.include_router(settlements_routers.settlements_router)
 app.include_router(history_routers.history_router)
 app.include_router(activities_routers.activites_router)
 app.include_router(group_routers.group_router)
+app.include_router(dashboard_routers.dashboard_router)
 
 # exception handling
 handlers(app)
