@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend_splitbill.database import get_db
 from backend_splitbill.auth.authentication import get_current_user
@@ -9,6 +10,7 @@ from backend_splitbill.services.cloudinary import (
 from backend_splitbill.services.hash_password_otp import hash, verify
 
 from backend_splitbill.model import UserHistory, UserHistoryAction
+from backend_splitbill.model import User
 from backend_splitbill.schemas.profile_schema import (
     ProfileUpdate as ProfileUpdateSchema,
     ChangePassword as ChangePasswordSchema,
@@ -18,6 +20,22 @@ from backend_splitbill.schemas.user_schema import (
 )
 
 profile_router = APIRouter(prefix="/api/users/profile", tags=["Profile"])
+
+
+@profile_router.get("/history")
+async def get_profile_history(
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(
+        select(UserHistory)
+        .where(UserHistory.user_id == current_user.id)
+        .order_by(UserHistory.performed_at.desc(), UserHistory.id.desc())
+        .limit(30)
+    )
+    return [
+        {"id": item.id, "action": item.action.value, "performed_at": item.performed_at}
+        for item in result.scalars().all()
+    ]
 
 
 # * update name or profile picture

@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func
+from sqlalchemy.orm import lazyload, selectinload
 from typing import Annotated
 from backend_splitbill.database import get_db
 from backend_splitbill.auth.authentication import get_current_user
 
-from backend_splitbill.model import ExpenseHistory, Settlement, FriendsHistory
+from backend_splitbill.model import Expense, ExpenseHistory, Settlement, FriendsHistory
 from backend_splitbill.schemas.history_schema import (
     ExpenseHistoryResponse as ExpenseHistoryResponseSchema,
     SettlementHistoryResponse as SettlementHistoryResponseSchema,
@@ -64,6 +65,19 @@ async def get_settlement_history_api(
     total = (await db.execute(select(func.count(Settlement.id)).where(where))).scalar_one()
     result = await db.execute(
         select(Settlement)
+        .options(
+            lazyload("*"),
+            selectinload(Settlement.receiver).options(lazyload("*")),
+            selectinload(Settlement.payer).options(lazyload("*")),
+            selectinload(Settlement.expense)
+            .load_only(
+                Expense.title,
+                Expense.description,
+                Expense.total_amount,
+                Expense.expense_date,
+            )
+            .options(lazyload("*")),
+        )
         .where(where)
         .order_by(Settlement.created_at.desc(), Settlement.id.desc())
         .offset((page - 1) * limit).limit(limit)
