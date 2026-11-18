@@ -7,13 +7,16 @@ import { AuthContext } from "../../context/AuthProvider";
 import PayBreakdown from "./PayBreakdown";
 import NavigationState from "./NavigationState";
 import Error from "../error/Error";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import getBackendError from "../../utils/getBackendError";
 
 function AddExpense() {
+  const { expenseId } = useParams();
+  const isEditing = Boolean(expenseId);
   const { user } = useContext(AuthContext);
 
   const [addLoading, setAddLoading] = useState(false);
+  const [expenseLoading, setExpenseLoading] = useState(Boolean(expenseId));
 
   const [expense, setExpense] = useState({
     title: "",
@@ -150,6 +153,84 @@ function AddExpense() {
 
   const [activeState, setActiveState] = useState("expense");
 
+  useEffect(() => {
+    if (!expenseId) return;
+    let ignore = false;
+    const loadExpense = async () => {
+      try {
+        const response = await api.get(`/expenses/edit/${expenseId}`);
+        const item = response.data;
+        if (!item?.id) throw new Error("Expense details could not be found.");
+        if (ignore) return;
+        const details = item;
+        setExpense({
+          title: details.title,
+          description: details.description || "",
+          note: details.note || "",
+          amount: Number(details.total_amount),
+          expense_date: details.expense_date,
+        });
+        setSelectedGroup(
+          details.group
+            ? { value: details.group.id, label: details.group.name }
+            : null,
+        );
+        setSelectedParticipants(
+          item.expense_splits.map(({ user: participant }) => ({
+            value: participant.id,
+            label: participant.id === user.id ? "You" : participant.name,
+            isFixed: participant.id === user.id,
+          })),
+        );
+        setPayments(
+          item.expense_splits.map((split) => ({
+            id: split.user.id,
+            name: split.user.id === user.id ? "You" : split.user.name,
+            amount: Number(split.paid_amount),
+          })),
+        );
+        const payers = item.expense_splits.filter((split) => Number(split.paid_amount) > 0);
+        setPaidBy(
+          payers.length === 1
+            ? {
+                value: payers[0].user.id,
+                label: payers[0].user.id === user.id ? "You" : payers[0].user.name,
+              }
+            : { value: "multiple", label: "Multiple people" },
+        );
+        setSplitMethod(
+          splitOptions.find(
+            (option) => option.value === details.split_method,
+          ) || null,
+        );
+        if (details.split_method === "amount")
+          setSplitAmounts(
+            item.expense_splits.map((split) => ({
+              id: split.user.id,
+              name: split.user.name,
+              amount: Number(split.split_value || 0),
+            })),
+          );
+        if (details.split_method === "percentage")
+          setSplitPercentages(
+            item.expense_splits.map((split) => ({
+              id: split.user.id,
+              name: split.user.name,
+              percentage: Number(split.split_value || 0),
+            })),
+          );
+      } catch (error) {
+        if (!ignore) setBackErrors(error.response ? getBackendError(error) : { error: [error.message], type: 404 });
+      } finally {
+        if (!ignore) setExpenseLoading(false);
+      }
+    };
+    loadExpense();
+    return () => {
+      ignore = true;
+    };
+  }, [expenseId, user.id]);
+
   // get friends for participants options
   const getFriends = async () => {
     try {
@@ -229,6 +310,14 @@ function AddExpense() {
   }, [selectedGroup, friendOptions]);
 
   const handleChange = (e, field) => {
+    if (field === "amount" && Number(e.target.value) !== expenseAmount) {
+      setSplitAmounts((previous) =>
+        previous.map((split) => ({ ...split, amount: 0 })),
+      );
+      setSplitPercentages((previous) =>
+        previous.map((split) => ({ ...split, percentage: 0 })),
+      );
+    }
     setExpense((prevExpense) => ({
       ...prevExpense,
       [field]: e.target.value,
@@ -373,7 +462,8 @@ function AddExpense() {
         expense_splits: expense_splits,
       };
 
-      await api.post("/expenses", data);
+      if (isEditing) await api.put(`/expenses/${expenseId}`, data);
+      else await api.post("/expenses", data);
 
       return navigate("/dashboard");
     } catch (error) {
@@ -390,9 +480,11 @@ function AddExpense() {
         <div className="w-full max-w-3xl m-8 flex items-start justify-center lg:px-0 px-6 py-6 bg-white border border-blue-100/60 shadow-xl shadow-blue-100/90 bg-gradient-to-br from-blue-50/60 via-white to-blue-50/60">
           <div className="w-full max-w-2xl">
             <div className="mb-8 place-self-center text-center">
-              <h2 className="text-2xl glittery-shadow p-2">Add expense</h2>
+              <h2 className="text-2xl glittery-shadow p-2">
+                {isEditing ? "Edit expense" : "Add expense"}
+              </h2>
               <p className="text-sm text-slate-400 max-w-xs ">
-                Start splitting expenses with friends.
+                {isEditing ? "Update the details and split for this expense." : "Start splitting expenses with friends."}
               </p>
             </div>
 
@@ -425,7 +517,9 @@ function AddExpense() {
                 )}
               </div>
 
-              <div className="min-h-[350px]">
+              {expenseLoading ? (
+                <div className="flex min-h-[350px] items-center justify-center text-sm text-slate-500" role="status">Loading expense details…</div>
+              ) : <div className="min-h-[350px]">
                 {/* Expense details */}
                 {activeState === "expense" && (
                   <fieldset className="rounded-xl border border-blue-100 bg-white px-6 py-4 pb-6">
@@ -547,6 +641,19 @@ function AddExpense() {
                         required={false}
                         onChange={(group) => {
                           setFrontErrors([]);
+                          if (
+                            (group?.value ?? null) !==
+                            (selectedGroup?.value ?? null)
+                          ) {
+                            setSelectedParticipants([
+                              { value: user.id, label: "You", isFixed: true },
+                            ]);
+                            setPaidBy(null);
+                            setPayments([]);
+                            setSplitMethod(null);
+                            setSplitAmounts([]);
+                            setSplitPercentages([]);
+                          }
                           setSelectedGroup(group);
                         }}
                       />
@@ -664,12 +771,13 @@ function AddExpense() {
                     )}
                   </fieldset>
                 )}
-              </div>
+              </div>}
 
               {/* Submit Button */}
               <button
                 disabled={
                   addLoading ||
+                  expenseLoading ||
                   !isExpenseComplete ||
                   !areParticipantsComplete ||
                   !isSplitComplete ||
@@ -680,7 +788,7 @@ function AddExpense() {
                 className={`btn ${addLoading && `opacity-50`}`}
                 type="submit"
               >
-                {addLoading ? "Adding..." : "Add expense"}
+                {addLoading ? (isEditing ? "Saving…" : "Adding…") : (isEditing ? "Save changes" : "Add expense")}
               </button>
             </form>
           </div>
