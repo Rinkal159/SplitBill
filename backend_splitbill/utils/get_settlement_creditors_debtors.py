@@ -2,8 +2,11 @@ from backend_splitbill.utils.get_settlement_groups import get_settlement_groups
 from decimal import Decimal
 
 
-async def get_settlement_creditors_debtors(splits, db, creditors, debtors):
-    settlement_splits = await get_settlement_groups(splits, db)
+async def get_settlement_creditors_debtors(
+    splits, db, creditors, debtors, settlement_groups=None
+):
+    if settlement_groups is None:
+        settlement_groups = await get_settlement_groups(splits, db)
     balance_creditors = {}
 
     for split in splits:
@@ -13,7 +16,7 @@ async def get_settlement_creditors_debtors(splits, db, creditors, debtors):
                 {"user": split.user, "balance": balance, "split_id": split.id}
             )
         elif balance < 0:
-            existed_settlement = settlement_splits.get(split.id, [])
+            existed_settlement = settlement_groups.get(split.id, [])
             total_balance = Decimal("0")
             if existed_settlement:
                 for settlement_id in existed_settlement:
