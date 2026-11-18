@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
 import formatAmount from "../../utils/formatAmount";
 import getBackendError from "../../utils/getBackendError";
@@ -36,21 +36,40 @@ function GroupSettlement({
 
   // error
   const [backErrors, setBackErrors] = useState({});
+  const [memberBalances, setMemberBalances] = useState({});
+  const [balancesLoading, setBalancesLoading] = useState(true);
 
   // cash confirmation modal
   const [showCashConfirmation, setShowCashConfirmation] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+    setBalancesLoading(true);
+    api
+      .get(`/expenses/groups/${group.id}/settlement-balances`)
+      .then(({ data }) => {
+        if (!cancelled) setMemberBalances(data.friend_balances ?? {});
+      })
+      .catch((error) => {
+        if (!cancelled) setBackErrors(getBackendError(error));
+      })
+      .finally(() => {
+        if (!cancelled) setBalancesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [group.id]);
+
   const membersById = useMemo(() => {
     const result = {};
-    expenses.expenses.forEach((entry) => {
-      entry.your_actual_settlements.forEach((settlement) => {
-        result[settlement.to_user.id] = settlement.to_user;
-      });
+    (group.members ?? []).forEach(({ user }) => {
+      if (user) result[user.id] = user;
     });
     return result;
-  }, [expenses]);
+  }, [group.members]);
 
-  const options = Object.entries(expenses.friend_balances)
+  const options = Object.entries(memberBalances)
     .filter(([id, balance]) => Number(balance) < 0 && membersById[id])
     .map(([id, balance]) => ({
       value: Number(id),
@@ -135,9 +154,15 @@ function GroupSettlement({
         className="inner-modal max-w-lg p-6"
         onClick={(event) => event.stopPropagation()}
       >
-        <button type="button" onClick={onClose} className="cancel-icon">
-          ✕
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close expense summary"
+          className="cancel-icon"
+        >
+          <i className="fa-solid fa-xmark" aria-hidden="true" />
         </button>
+        
         <p className="text-center text-md text-slate-500">
           Settle up in <span className="glittery-shadow">{group.name}</span>
         </p>
@@ -149,7 +174,11 @@ function GroupSettlement({
             onChange={chooseMembers}
             field="group-settlement-members"
             label="Who do you want to settle with?"
-            placeholder="Choose one or more members"
+            placeholder={
+              balancesLoading
+                ? "Loading group balances..."
+                : "Choose one or more members"
+            }
             isMultiSelect
             closeMenuOnSelect={true}
             required
@@ -264,8 +293,7 @@ function GroupSettlement({
               <button
                 className="btn text-md disabled:text-sky-700 border disabled:border-2 disabled:border-blue-200 invitation-btn edit-text edit-btn-shadow self-center px-4 py-1.5"
                 type="submit"
-                disabled={settleLoading}
-                onClick={submit}
+                disabled={settleLoading || balancesLoading}
               >
                 {settleLoading ? "Sending settlement requests..." : "Settle up"}
               </button>

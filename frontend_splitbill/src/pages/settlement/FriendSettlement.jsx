@@ -22,7 +22,8 @@ function FriendSettlement({
   activeFilter,
   settlementGroups = [],
   settlementGroupsLoading = false,
-  loadDashboardData
+  loadDashboardData,
+  isGroupOnlySettlement = false,
 }) {
   // today local date
   const localToday = getTodayDate();
@@ -61,9 +62,9 @@ function FriendSettlement({
 
   // settlement method
   const [selectedSettlementOption, setSelectedSettlementOption] = useState(
-    activeFilter == "all"
+    !isGroupOnlySettlement && activeFilter == "all"
       ? overallValue < 0 && overallOption
-      : activeFilter == "individual expenses"
+      : !isGroupOnlySettlement && activeFilter == "individual expenses"
         ? individualValue < 0 && individualOption
         : [],
   );
@@ -150,13 +151,18 @@ function FriendSettlement({
         className="inner-modal max-w-md p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close button */}
-        <button type="button" onClick={onClose} className="cancel-icon">
-          ✕
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close expense summary"
+          className="cancel-icon"
+        >
+          <i className="fa-solid fa-xmark" aria-hidden="true" />
         </button>
 
         <p className="text-center text-sm text-slate-500">
-          Settle with <span className="glittery-shadow">{toUser.name}</span>
+          {isGroupOnlySettlement ? "Settle group expenses with " : "Settle with "}
+          <span className="glittery-shadow">{toUser.name}</span>
         </p>
 
         <form
@@ -187,21 +193,21 @@ function FriendSettlement({
 
               <SelectMenu
                 options={[
-                  ...(overallValue < 0 ? [overallOption] : []),
-                  ...(individualValue < 0 ? [individualOption] : []),
+                  ...(!isGroupOnlySettlement && overallValue < 0 ? [overallOption] : []),
+                  ...(!isGroupOnlySettlement && individualValue < 0 ? [individualOption] : []),
                   ...groupsInDebt,
                 ]}
                 value={selectedSettlementOption}
                 onChange={(option) => {
-                  const selectedOption = option ?? overallOption;
-                  setSelectedSettlementOption(selectedOption);
+                  const selectedOption = option ?? (isGroupOnlySettlement ? null : overallOption);
+                  setSelectedSettlementOption(selectedOption ?? []);
                   setFrontErrors([]);
                   setBackErrors({});
                   setSettlement((prev) => ({
                     ...prev,
-                    amount: Number(selectedOption.debtAmount),
+                    amount: Number(selectedOption?.debtAmount ?? 0),
                     group_id:
-                      selectedOption.isOverall || selectedOption.isIndividual
+                      !selectedOption || selectedOption.isOverall || selectedOption.isIndividual
                         ? null
                         : Number(selectedOption.value),
                   }));
@@ -211,7 +217,7 @@ function FriendSettlement({
                 placeholder="Select an expense scope or group"
                 isMultiSelect={false}
                 closeMenuOnSelect={true}
-                required={false}
+                required={isGroupOnlySettlement}
                 formatOptionLabel={(option) => (
                   <div className="flex w-full items-center justify-between gap-6">
                     <span>{option.label}</span>
@@ -278,6 +284,7 @@ function FriendSettlement({
                 type="submit"
                 disabled={
                   settleLoading ||
+                  (isGroupOnlySettlement && !selectedSettlementOption?.value) ||
                   frontErrors.length !== 0 ||
                   Object.keys(backErrors).length !== 0
                 }
