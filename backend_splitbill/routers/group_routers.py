@@ -984,10 +984,13 @@ async def leave_group_api(
                 debtors=debtors,
                 settlement_groups=settlement_groups,
             )
-
             has_pending_settlements = any(
-                creditor["user"].id == current_user.id for creditor in creditors
-            ) or any(debtor["user"].id == current_user.id for debtor in debtors)
+                creditor["user"].id == current_user.id and creditor["balance"] > 0
+                for creditor in creditors.values()
+            ) or any(
+                debtor["user"].id == current_user.id and debtor["balance"] < 0
+                for debtor in debtors.values()
+            )
 
             if has_pending_settlements:
                 raise HTTPException(
@@ -1123,8 +1126,12 @@ async def remove_group_member_api(
             )
 
             has_pending_settlements = any(
-                creditor["user"].id == user_id for creditor in creditors
-            ) or any(debtor["user"].id == user_id for debtor in debtors)
+                creditor["user"].id == user_id and creditor["balance"] > 0
+                for creditor in creditors.values()
+            ) or any(
+                debtor["user"].id == user_id and debtor["balance"] < 0
+                for debtor in debtors.values()
+            )
 
             if has_pending_settlements:
                 raise HTTPException(
@@ -1230,5 +1237,5 @@ async def admin_transfered_api(
         raise
 
     return {
-        "message": f"{existed_member.name} has been promoted to admin successfully!"
+        "message": f"Promoted to admin successfully!"
     }
