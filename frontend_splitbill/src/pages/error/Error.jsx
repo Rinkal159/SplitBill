@@ -15,7 +15,11 @@ function getErrorMessage(error) {
   );
 }
 
-export default function Error({ errors = [], type }) {
+export default function Error({
+  errors = [],
+  type,
+  shouldRoundAllCorners = true,
+}) {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
@@ -33,7 +37,7 @@ export default function Error({ errors = [], type }) {
       role="alert"
       aria-live="assertive"
       data-error-type={type}
-      className="text-red-500 rounded-t-2xl font-medium text-center bg-rose-100 py-2 px-4 flex justify-center items-center relative"
+      className={`text-red-500 ${shouldRoundAllCorners ? `rounded-xl` : `rounded-t-2xl`} font-medium text-center bg-rose-100 py-2 px-4 flex justify-center items-center relative`}
     >
       <ul className="space-y-1">
         {errorList.map((error, index) => (
