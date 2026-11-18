@@ -24,7 +24,7 @@
     }
 
     .glittery-shadow {
-        @apply font-medium bg-gradient-to-b from-sky-500 via-sky-400 to-blue-600 bg-clip-text text-transparent
+        @apply font-medium bg-gradient-to-r from-sky-500 via-sky-400 to-blue-600 bg-clip-text text-transparent
     }
 
     .heading {
