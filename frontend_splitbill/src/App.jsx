@@ -13,6 +13,7 @@ import ResetPassword from "./pages/auth/ResetPassword";
 import ProtectedResetPassword from "./pages/auth/ProtectedResetPassword";
 import AddExpense from "./pages/expense/AddExpense";
 import AllExpenses from "./pages/expense/AllExpenses";
+import { ProfilePage, SettingsPage } from "./pages/profile/ProfilePages";
 
 function App() {
   return (
@@ -34,7 +35,10 @@ function App() {
           <Route element={<AuthenticatedBody />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/expenses/add" element={<AddExpense />} />
+            <Route path="/expenses/:expenseId/edit" element={<AddExpense />} />
             <Route path="/expenses" element={<AllExpenses />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
