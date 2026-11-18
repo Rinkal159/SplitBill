@@ -1,3 +1,6 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&family=DM+Serif+Display:ital@0;1&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Playfair:opsz,wght@5..1200,300..900&family=Unna:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -21,11 +24,11 @@
     }
 
     .glittery-shadow {
-        @apply font-medium bg-gradient-to-r from-sky-500 via-sky-400 to-blue-600 bg-clip-text text-transparent
+        @apply font-medium bg-gradient-to-b from-sky-500 via-sky-400 to-blue-600 bg-clip-text text-transparent
     }
 
     .heading {
-        @apply text-2xl text-center py-4 pt-6
+        @apply text-2xl text-center py-4 pt-6 font-bold
     }
 
 
@@ -39,7 +42,7 @@
     }
 
     .invitation-btn {
-        @apply border py-1 px-3 rounded-3xl transition duration-200 ease-in-out hover:-translate-y-0.5 
+        @apply border py-1 px-3 rounded-3xl transition duration-200 ease-in-out hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed
     }
 
     .accept-text {
@@ -47,23 +50,27 @@
     }
 
     .reject-text {
-        @apply font-medium bg-gradient-to-r from-red-600 via-red-400 to-red-700 bg-clip-text text-transparent 
+        @apply font-medium bg-gradient-to-r from-red-600 via-red-400 to-red-700 bg-clip-text text-transparent
     }
 
     .edit-text {
-        @apply font-medium bg-gradient-to-r from-sky-500 via-sky-400 to-blue-600 bg-clip-text text-transparent
+        @apply font-medium bg-gradient-to-r from-blue-500 via-sky-400 to-blue-500 bg-clip-text text-transparent
     }
 
     .edit-btn-shadow {
-        @apply border border-blue-400 hover:bg-gradient-to-r from-sky-500 via-sky-400 to-blue-500 hover:bg-clip-border hover:text-white
+        @apply border border-blue-400 hover:bg-gradient-to-r from-sky-600 via-sky-500 to-blue-600 hover:bg-clip-border hover:text-white shadow-sm shadow-sky-200/50
     }
 
     .accept-btn-shadow {
-        @apply border border-green-500 hover:bg-gradient-to-r hover:from-green-500 hover:via-green-400 hover:to-green-600 hover:bg-clip-border hover:text-white
+        @apply border border-green-500 hover:bg-gradient-to-r hover:from-green-500 hover:via-green-400 hover:to-green-600 hover:bg-clip-border hover:text-white shadow-sm shadow-green-200/50
     }
 
     .reject-btn-shadow {
-        @apply border border-red-400 hover:bg-gradient-to-r hover:from-red-500 hover:via-red-400 hover:to-red-600 hover:bg-clip-border hover:text-white
+        @apply border border-red-400 hover:bg-gradient-to-r hover:from-red-500 hover:via-red-400 hover:to-red-600 hover:bg-clip-border hover:text-white shadow-sm shadow-rose-200/50
+    }
+
+    .slate-text {
+        @apply font-medium bg-gradient-to-r from-slate-500 via-slate-400 to-slate-600 bg-clip-text text-transparent
     }
 
 
@@ -73,7 +80,7 @@
     }
 
     .active-state {
-        @apply 
+        @apply
     }
 
 
@@ -81,6 +88,7 @@
     .box {
         @apply shadow-sm shadow-slate-200 hover:border-blue-200 hover:bg-gradient-to-br from-sky-50/80 via-white to-sky-50/80 hover:shadow-md hover:cursor-default
     }
+
     .active-box {
         @apply bg-gradient-to-br from-sky-50/80 via-white to-sky-50/80 shadow-md shadow-blue-100/80
     }
@@ -96,8 +104,7 @@
     }
 
     .invite-img {
-        @apply w-16 h-16 rounded-full object-cover
-        border-2 border-white shadow-md
+        @apply w-16 h-16 rounded-full object-cover border-2 border-white shadow-md
     }
 
 
@@ -111,7 +118,7 @@
     }
 
     .cancel-icon {
-        @apply absolute right-4 top-4 text-xl text-slate-400 transition hover:text-slate-700
+        @apply absolute right-4 top-4 rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800
     }
 
     .italic-text {
@@ -120,9 +127,13 @@
 }
 
 .slow-loading {
-  animation-duration: 3s;
+    animation-duration: 3s;
 }
 
 .form-lbl:has(+ .form-input:focus) {
     @apply text-slate-900;
+}
+
+.splitbill-logo {
+    font-family: "DM Serif Display", serif;
 }
