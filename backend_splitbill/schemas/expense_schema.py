@@ -46,6 +46,7 @@ class UserDetail(Base):
 
 
 class GroupDetail(Base):
+    id: int
     name: str
     description: str | None
     creator: UserDetail
@@ -68,6 +69,8 @@ class ExpenseDetail(Base):
     id: int
     group: GroupDetail | None
     title: str
+    description: str | None = None
+    note: str | None = None
     total_amount: Decimal
     expense_date: date
     created_at: datetime
@@ -114,6 +117,10 @@ class ExpenseSchema(Base):
     your_actual_settlements: list[YourSettlementSchema]
     others_actual_settlements: list[SettlementSchema]
     your_balance: Decimal
+
+
+class SingleExpenseResponse(Base):
+    expenses: list[ExpenseSchema]
 
 
 class PaginatedExpensesResponse(Base):
