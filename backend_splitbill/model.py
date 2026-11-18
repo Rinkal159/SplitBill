@@ -419,6 +419,10 @@ class SettlementStatus(str, Enum):
 # Settlemet and SettlementHistory
 class Settlement(Base):
     __tablename__ = "settlements"
+    __table_args__ = (
+        Index("ix_settlements_from_user_created_at_id", "from_user", "created_at", "id"),
+        Index("ix_settlements_to_user_created_at_id", "to_user", "created_at", "id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     expense_id: Mapped[int] = mapped_column(
@@ -854,6 +858,13 @@ class GroupHistory(Base):
 async def create_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # create_all does not add indexes to tables that already exist
+        for index in Settlement.__table__.indexes:
+            await conn.run_sync(
+                lambda sync_conn, current_index=index: current_index.create(
+                    bind=sync_conn, checkfirst=True
+                )
+            )
 
 
 if __name__ == "__main__":
