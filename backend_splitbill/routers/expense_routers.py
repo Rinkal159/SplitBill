@@ -36,7 +36,7 @@ from backend_splitbill.utils.get_friend_settlement_data import (
 from backend_splitbill.schemas.expense_schema import (
     ExpenseCreate as ExpenseCreateSchema,
     ExpenseCreateResponse as ExpenseCreateResponseSchema,
-    ExpenseSchema as SingleExpenseResponseSchema,
+    SingleExpenseResponse as SingleExpenseResponseSchema,
     PaginatedExpensesResponse as PaginatedExpensesResponseSchema,
     BorrowingsAndLendings as BorrowingsAndLendingsSchema,
     FriendsSettlementsResponse as FriendsSettlementsResponseSchema,
@@ -57,6 +57,67 @@ from backend_splitbill.model import (
 )
 
 expense_router = APIRouter(prefix="/api/expenses", tags=["Expenses"])
+
+
+@expense_router.get("/groups/{group_id:int}/settlement-balances")
+async def get_group_settlement_balances(
+    group_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    group = await db.scalar(
+        select(Group).where(Group.id == group_id, Group.is_deleted.is_(False))
+    )
+    if group is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+
+    member = await db.scalar(
+        select(GroupMember).where(
+            GroupMember.group_id == group_id,
+            GroupMember.user_id == current_user.id,
+        )
+    )
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You're not a member of this group",
+        )
+
+    expense_ids = (
+        await db.scalars(select(Expense.id).where(Expense.group_id == group_id))
+    ).all()
+    expense_groups = await get_expense_groups(expense_ids, db, newest_first=True)
+    all_splits = [split for splits in expense_groups for split in splits]
+    settlement_groups = await get_settlement_groups(all_splits, db)
+
+    friend_balances: dict[int, Decimal] = {}
+    for splits in expense_groups:
+        creditors: dict = {}
+        debtors: dict = {}
+        get_creditors_debtors(splits, creditors, debtors, settlement_groups)
+        creditor_ids = list(creditors)
+        debtor_ids = list(debtors)
+        i = j = 0
+        while i < len(creditor_ids) and j < len(debtor_ids):
+            creditor = creditors[creditor_ids[i]]
+            debtor = debtors[debtor_ids[j]]
+            transfer = min(creditor["balance"], abs(debtor["balance"]))
+
+            if creditor["user"].id == current_user.id:
+                other_id = debtor["user"].id
+                friend_balances[other_id] = friend_balances.get(other_id, Decimal("0")) + transfer
+            elif debtor["user"].id == current_user.id:
+                other_id = creditor["user"].id
+                friend_balances[other_id] = friend_balances.get(other_id, Decimal("0")) - transfer
+
+            creditor["balance"] -= transfer
+            debtor["balance"] += transfer
+            if creditor["balance"] <= 0:
+                i += 1
+            if debtor["balance"] >= 0:
+                j += 1
+
+    return {"friend_balances": friend_balances}
 
 
 # * add an expense
@@ -307,6 +368,73 @@ async def get_borrowings_api(
 
 
 # * get single expense
+@expense_router.get("/edit/{expense_id}")
+async def get_expense_for_edit(
+    expense_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    expense_result = await db.execute(
+        select(
+            Expense.id,
+            Expense.group_id,
+            Expense.title,
+            Expense.description,
+            Expense.note,
+            Expense.total_amount,
+            Expense.expense_date,
+            Expense.split_method,
+            Expense.created_by,
+            Group.name.label("group_name"),
+        )
+        .outerjoin(Group, Group.id == Expense.group_id)
+        .where(Expense.id == expense_id)
+    )
+    expense = expense_result.mappings().one_or_none()
+    if not expense:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
+    if expense["created_by"] != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You're not authorized to edit this expense",
+        )
+
+    splits_result = await db.execute(
+        select(
+            ExpenseSplits.user_id,
+            User.name,
+            ExpenseSplits.paid_amount,
+            ExpenseSplits.split_value,
+        )
+        .join(User, User.id == ExpenseSplits.user_id)
+        .where(ExpenseSplits.expense_id == expense_id)
+        .order_by(ExpenseSplits.user_id)
+    )
+    group = (
+        {"id": expense["group_id"], "name": expense["group_name"]}
+        if expense["group_id"] is not None
+        else None
+    )
+    return {
+        "id": expense["id"],
+        "group": group,
+        "title": expense["title"],
+        "description": expense["description"],
+        "note": expense["note"],
+        "total_amount": expense["total_amount"],
+        "expense_date": expense["expense_date"],
+        "split_method": expense["split_method"],
+        "expense_splits": [
+            {
+                "user": {"id": split.user_id, "name": split.name},
+                "paid_amount": split.paid_amount,
+                "split_value": split.split_value,
+            }
+            for split in splits_result
+        ],
+    }
+
+
 @expense_router.get("/{expense_id}", response_model=SingleExpenseResponseSchema)
 async def get_single_expense(
     expense_id: int,
@@ -760,6 +888,15 @@ async def delete_expense_api(
             detail="You're not authorized to perform requested action",
         )
 
+    # Expenses with outstanding balances cannot be removed.
+    splits = await get_expense_groups(expense_ids=[expense_id], db=db, newest_first=True)
+    if splits:
+        settlement_groups = await get_settlement_groups(splits=splits[0], db=db)
+        creditors, debtors = {}, {}
+        get_creditors_debtors(splits=splits[0], creditors=creditors, debtors=debtors, settlement_groups=settlement_groups)
+        if creditors or debtors:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This expense has unsettled amounts and cannot be deleted. Settle all balances first.")
+
     # creating expense history
     new_expense_history = ExpenseHistory(
         expense_id=expense_id,
@@ -819,6 +956,7 @@ async def update_expense_api(
 
     # updating expense
     existed_expense.title = expense.title
+    existed_expense.group_id = expense.group_id # type: ignore[call-args]
     existed_expense.description = expense.description  # type: ignore[call-args]
     existed_expense.note = expense.note  # type: ignore[call-args]
     existed_expense.total_amount = expense.total_amount
