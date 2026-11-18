@@ -9,17 +9,39 @@ import getBackendError from "../../utils/getBackendError";
 import formatAmount from "../../utils/formatAmount";
 import GroupSettlement from "../settlement/GroupSettlement";
 import ExpenseSettlement from "../settlement/ExpenseSettlement";
+import ExpenseSplitsSummary from "../expense/ExpenseSplitsSummary";
+import LoadMore from "../common/LoadMore";
+import { useNavigate } from "react-router-dom";
+
+const PAGE_SIZE = 10;
 
 function GroupExpenses({
   receivedGroup,
   onInvitationSent,
   getGroups,
   loadSentSettlementReuqests,
-  loadDashboardData
+  loadDashboardData,
 }) {
   const { user } = useContext(AuthContext);
   const [expenses, setExpenses] = useState({});
   const [openExpense, setOpenExpense] = useState(null);
+  const [expenseSummary, setExpenseSummary] = useState(null);
+  const [deleteMessage, setDeleteMessage] = useState("");
+  const navigate = useNavigate();
+
+  const deleteExpense = async (event, id) => {
+    event.stopPropagation();
+    try {
+      await api.delete(`/expenses/${id}`);
+      setDeleteMessage("");
+      await getGroupExpenses();
+    } catch (error) {
+      setDeleteMessage(
+        getBackendError(error).error?.[0] ||
+          "This expense has unsettled amounts. Settle all balances before deleting it.",
+      );
+    }
+  };
   const [group, setGroup] = useState(receivedGroup);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -37,18 +59,49 @@ function GroupExpenses({
 
   // loading
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
 
   // error
   const [backErrors, setBackErrors] = useState({});
 
-  const getGroupExpenses = async () => {
+  const getGroupExpenses = async (nextPage = 1, append = false) => {
     try {
-      const res = await api.get(`/expenses/groups/${group.id}?limit=99`);
-      setExpenses(res.data);
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      const res = await api.get(`/expenses/groups/${group.id}`, {
+        params: { page: nextPage, limit: PAGE_SIZE },
+      });
+      setExpenses((previous) => {
+        const oldBalances = append ? (previous.friend_balances ?? {}) : {};
+        const mergedBalances = { ...oldBalances };
+        Object.entries(res.data.friend_balances ?? {}).forEach(
+          ([id, value]) => {
+            mergedBalances[id] =
+              Number(mergedBalances[id] ?? 0) + Number(value);
+          },
+        );
+        return {
+          ...res.data,
+          expenses: append
+            ? [...(previous.expenses ?? []), ...res.data.expenses]
+            : res.data.expenses,
+          friend_balances: mergedBalances,
+          total_balance: append
+            ? Number(previous.total_balance ?? 0) +
+              Number(res.data.total_balance)
+            : res.data.total_balance,
+        };
+      });
+      setPage(res.data.page);
+      setHasMore(res.data.has_more);
       setLoading(false);
     } catch (error) {
-      setLoading(true);
+      if (!append) setLoading(false);
       setBackErrors(getBackendError(error));
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -74,7 +127,6 @@ function GroupExpenses({
     return <Loading msg={receivedGroup.name} />;
   }
 
-
   return (
     <div className="p-6">
       {/* name, how much borrowed/lent and settle up */}
@@ -94,13 +146,14 @@ function GroupExpenses({
             >
               {group.name}
             </h1>
-            {expenses.total_balance == 0
+            {!hasMore && expenses.total_balance == 0
               ? expenses.expenses.length > 0 && (
                   <p>
                     You are <span className="accept-text">settled</span>
                   </p>
                 )
-              : expenses.expenses.length > 0 && (
+              : !hasMore &&
+                expenses.expenses.length > 0 && (
                   <p className="text-slate-600">
                     You{" "}
                     <span className="font-medium">
@@ -115,23 +168,25 @@ function GroupExpenses({
                 )}
           </div>
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => setShowEditGroupModal(true)}
-            className="invitation-btn edit-text edit-btn-shadow py-2 px-4 mx-2"
-          >
-            Edit <i class="fa-solid fa-pen-to-square"></i>
-          </button>
-        )}
+        <div className="">
+          {isAdmin && (
+            <button
+              onClick={() => setShowEditGroupModal(true)}
+              className="invitation-btn edit-text edit-btn-shadow py-2 px-4"
+            >
+              Edit <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+          )}
 
-        {expenses.total_balance < 0 && (
-          <button
-            onClick={() => setShowGroupSettlementModal(true)}
-            className="invitation-btn edit-text edit-btn-shadow py-2 px-4 mx-2"
-          >
-            Settle up
-          </button>
-        )}
+          {!hasMore && expenses.total_balance < 0 && (
+            <button
+              onClick={() => setShowGroupSettlementModal(true)}
+              className="invitation-btn edit-text edit-btn-shadow py-2 px-4 mx-2"
+            >
+              Settle up
+            </button>
+          )}
+        </div>
       </header>
 
       {/* expenses */}
@@ -286,9 +341,23 @@ function GroupExpenses({
                     <hr className="border-slate-200" />
 
                     {/* Expense Splits */}
-                    <h1 className="pt-4 text-md font-semibold text-slate-600">
-                      Expense splits :
-                    </h1>
+                    <div className="flex justify-between items-center mt-2">
+                      <h1 className="text-md font-semibold text-slate-600">
+                        Expense summary :
+                      </h1>
+                      <div className="group text-slate-700">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpenseSummary(expense);
+                          }}
+                          className="font-semibold  pr-1 group-hover:underline"
+                        >
+                          Expense splits
+                        </button>
+                        <i class="fa-solid fa-arrow-right-long relative top-0.5 trans group-hover:translate-x-0.5"></i>
+                      </div>
+                    </div>
 
                     {expense.your_actual_settlements.length === 0 &&
                       expense.others_actual_settlements.length === 0 && (
@@ -376,10 +445,13 @@ function GroupExpenses({
                     )}
 
                     {/* Actions */}
-                    <div className="flex gap-2 py-4">
+                    <div className="flex flex-wrap gap-2 py-4">
                       {user.id == expense.expense.created_by && (
                         <button
-                          onClick={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/expenses/${expense.expense.id}/edit`);
+                          }}
                           className="invitation-btn edit-text edit-btn-shadow"
                         >
                           Edit expense
@@ -405,7 +477,7 @@ function GroupExpenses({
 
                       {user.id == expense.expense.created_by && (
                         <button
-                          onClick={(e) => e.stopPropagation()}
+                          onClick={(e) => deleteExpense(e, expense.expense.id)}
                           className="invitation-btn reject-text reject-btn-shadow"
                         >
                           Delete expense
@@ -425,10 +497,66 @@ function GroupExpenses({
         )}
       </div>
 
+      <LoadMore
+        hasMore={hasMore}
+        loading={loadingMore}
+        label="group expenses"
+        onClick={() => getGroupExpenses(page + 1, true)}
+      />
+
+      {deleteMessage && (
+        <div className="outer-modal" onClick={() => setDeleteMessage("")}>
+          <div
+            className="inner-modal max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="cancel-icon top-2 right-2"
+              onClick={() => setDeleteMessage("")}
+              aria-label="Close"
+            >
+              <i className="fa-solid fa-xmark" />
+            </button>
+            <h2 className="heading glittery-shadow">
+              Expense can’t be deleted
+            </h2>
+            <p className="py-4 text-center text-slate-600">{deleteMessage}</p>
+            <button
+              className="invitation-btn edit-text edit-btn-shadow"
+              onClick={() => setDeleteMessage("")}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+
       {showGroupDetailsModal && (
         <GroupDetails
           onClose={() => setShowGroupDetailsModal(false)}
           group={group}
+          isAdmin={isAdmin}
+          onGroupChanged={async (action) => {
+            setShowGroupDetailsModal(false);
+            setLoading(true);
+            await getGroups?.();
+            if (action === "promote" || action === "remove") {
+              try {
+                const refreshed = await api.get(`/groups/${group.id}`);
+                setGroup(refreshed.data.group);
+                setIsAdmin(
+                  refreshed.data.group.members.some(
+                    (member) =>
+                      member.user.id === user.id &&
+                      member.role?.toUpperCase() === "ADMIN",
+                  ),
+                );
+              } catch (error) {
+                setBackErrors(getBackendError(error));
+              }
+              await getGroupExpenses();
+            }
+          }}
         />
       )}
 
@@ -464,6 +592,13 @@ function GroupExpenses({
           loadExpenses={getGroupExpenses}
           loadSentSettlementReuqests={loadSentSettlementReuqests}
           loadDashboardData={loadDashboardData}
+        />
+      )}
+
+      {expenseSummary && (
+        <ExpenseSplitsSummary
+          expense={expenseSummary}
+          onClose={() => setExpenseSummary(null)}
         />
       )}
     </div>

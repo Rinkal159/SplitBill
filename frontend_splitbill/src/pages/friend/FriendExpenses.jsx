@@ -9,6 +9,11 @@ import getBackendError from "../../utils/getBackendError";
 import Error from "../error/Error";
 import FriendSettlement from "../settlement/FriendSettlement";
 import ExpenseSettlement from "../settlement/ExpenseSettlement";
+import ExpenseSplitsSummary from "../expense/ExpenseSplitsSummary";
+import LoadMore from "../common/LoadMore";
+import { useNavigate } from "react-router-dom";
+
+const PAGE_SIZE = 10;
 
 const settlementGroupRequests = new Map();
 
@@ -26,15 +31,20 @@ async function loadSettlementGroups(friendId, refresh = false) {
   return settlementGroupRequests.get(friendId);
 }
 
-function FriendExpenses({ friend, loadSentSettlementReuqests, loadDashboardData }) {
+function FriendExpenses({ friend, isGroupOnlySettlement = false, loadSentSettlementReuqests, loadDashboardData }) {
   const { user } = useContext(AuthContext);
+  const navigate = useNavigate();
   const [expenses, setExpenses] = useState({});
   const [settlementGroups, setSettlementGroups] = useState([]);
   const [settlementGroupsLoading, setSettlementGroupsLoading] = useState(true);
   const [openExpense, setOpenExpense] = useState(null);
+  const [expenseSummary, setExpenseSummary] = useState(null);
 
   // loading
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [expensePage, setExpensePage] = useState(1);
+  const [expensesHaveMore, setExpensesHaveMore] = useState(false);
 
   // error
   const [backErrors, setBackErrors] = useState({});
@@ -55,17 +65,23 @@ function FriendExpenses({ friend, loadSentSettlementReuqests, loadDashboardData 
   ] = useState([]);
 
 
-  const getExpenses = async () => {
+  const getExpenses = async (page = 1, append = false) => {
     try {
-      const response = await api.get(`expenses/friends/${friend.id}`);
-      console.log(response.data);
-      
-      setExpenses(response.data);
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      const response = await api.get(`expenses/friends/${friend.id}`, { params: { page, limit: PAGE_SIZE } });
+      setExpenses((previous) => ({
+        ...response.data,
+        settlements: append ? [...(previous.settlements ?? []), ...response.data.settlements] : response.data.settlements,
+      }));
+      setExpensePage(response.data.page ?? page);
+      setExpensesHaveMore(Boolean(response.data.has_more));
       setLoading(false);
     } catch (error) {
       setBackErrors(getBackendError(error));
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -348,9 +364,23 @@ function FriendExpenses({ friend, loadSentSettlementReuqests, loadDashboardData 
                       <hr className="border-slate-200" />
 
                       {/* Expense Splits */}
-                      <h1 className="pt-4 text-md font-semibold text-slate-600">
-                        Expense splits :
-                      </h1>
+                      <div className="flex justify-between items-center mt-2">
+                    <h1 className="text-md font-semibold text-slate-600">
+                      Expense summary :
+                    </h1>
+                    <div className="group text-slate-700">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpenseSummary(expense);
+                        }}
+                        className="font-semibold  pr-1 group-hover:underline"
+                      >
+                        Expense splits
+                      </button>
+                      <i class="fa-solid fa-arrow-right-long relative top-0.5 trans group-hover:translate-x-0.5"></i>
+                    </div>
+                  </div>
 
                       {expense.your_actual_settlements.length === 0 &&
                         expense.others_actual_settlements.length === 0 && (
@@ -438,10 +468,14 @@ function FriendExpenses({ friend, loadSentSettlementReuqests, loadDashboardData 
                       )}
 
                       {/* Actions */}
-                      <div className="flex gap-2 py-4">
+                      <div className="flex flex-wrap gap-2 py-4">
+                        
                         {user.id == expense.expense.created_by && (
                           <button
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/expenses/${expense.expense.id}/edit`);
+                            }}
                             className="invitation-btn edit-text edit-btn-shadow"
                           >
                             Edit expense
@@ -488,10 +522,13 @@ function FriendExpenses({ friend, loadSentSettlementReuqests, loadDashboardData 
         )}
       </div>
 
+      <LoadMore hasMore={expensesHaveMore} loading={loadingMore} label="expenses" onClick={() => getExpenses(expensePage + 1, true)} />
+
       {showFriendSettlementModal && (
         <FriendSettlement
           onClose={() => setShowFriendSettlementModal(false)}
           toUser={friend}
+          isGroupOnlySettlement={isGroupOnlySettlement}
           settlementValue={formatAmount(Math.abs(balance))}
           overallValue={expenses.total_balance}
           individualValue={expenses.individual_balance}
@@ -515,6 +552,13 @@ function FriendExpenses({ friend, loadSentSettlementReuqests, loadDashboardData 
           loadExpenses={getExpenses}
           loadSentSettlementReuqests={loadSentSettlementReuqests}
           loadDashboardData={loadDashboardData}
+        />
+      )}
+
+      {expenseSummary && (
+        <ExpenseSplitsSummary
+          expense={expenseSummary}
+          onClose={() => setExpenseSummary(null)}
         />
       )}
     </div>
