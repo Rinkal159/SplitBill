@@ -8,6 +8,7 @@ from sqlalchemy.orm import lazyload, selectinload
 from backend_splitbill.auth.authentication import get_current_user
 from backend_splitbill.database import get_db
 from backend_splitbill.utils.get_expense_groups import get_expense_groups
+from backend_splitbill.utils.get_settlement_groups import get_settlement_groups
 from backend_splitbill.utils.get_friend_settlement_data import (
     get_friend_settlement_data,
 )
@@ -27,6 +28,8 @@ from backend_splitbill.model import (
     SettlementSplits,
     SettlementStatus,
     User,
+    Group,
+    GroupMember,
 )
 from backend_splitbill.schemas.settlement_schema import (
     ExpenseSettlementCreate as ExpenseSettlementCreateSchema,
@@ -86,14 +89,53 @@ async def create_group_settlement_requests(
 
     created = []
     try:
-        for item in payload.settlements:
-            available_debt, _ = await _get_request_scope_debt(
-                from_user=current_user,
-                to_user_id=item.to_user,
-                expense_id=None,
-                group_id=payload.group_id,
-                db=db,
+        group = await db.scalar(
+            select(Group).where(
+                Group.id == payload.group_id,
+                Group.is_deleted.is_(False),
             )
+        )
+        if group is None:
+            raise HTTPException(status_code=404, detail="Group not found")
+
+        required_user_ids = set(user_ids) | {current_user.id}
+        group_user_ids = set(
+            (
+                await db.scalars(
+                    select(GroupMember.user_id).where(
+                        GroupMember.group_id == payload.group_id,
+                        GroupMember.user_id.in_(required_user_ids),
+                    )
+                )
+            ).all()
+        )
+        if group_user_ids != required_user_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You and each selected member must belong to this group",
+            )
+
+        expense_ids = (
+            await db.scalars(
+                select(Expense.id).where(Expense.group_id == payload.group_id)
+            )
+        ).all()
+        expense_groups = await get_expense_groups(
+            expense_ids, db=db, newest_first=False
+        )
+        all_splits = [split for splits in expense_groups for split in splits]
+        settlement_groups = await get_settlement_groups(all_splits, db)
+
+        for item in payload.settlements:
+            available_debt = Decimal("0")
+            for splits in expense_groups:
+                available_debt += await _pairwise_debt(
+                    splits,
+                    current_user.id,
+                    item.to_user,
+                    db,
+                    settlement_groups=settlement_groups,
+                )
             if available_debt <= 0:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -118,9 +160,11 @@ async def create_group_settlement_requests(
             settlement.payer = current_user
             db.add(settlement)
             await db.flush()
-            expense_groups = await _get_split_groups_for_settlement(settlement, db)
             created_splits, _ = await _allocate_settlement_splits(
-                settlement, expense_groups, db
+                settlement,
+                expense_groups,
+                db,
+                settlement_groups=settlement_groups,
             )
             if not created_splits:
                 raise HTTPException(
@@ -155,11 +199,19 @@ async def _get_settlement(settlement_id: int, db: AsyncSession) -> Settlement:
     return settlement
 
 
-async def _pairwise_debt(splits, from_user_id: int, to_user_id: int, db) -> Decimal:
+async def _pairwise_debt(
+    splits, from_user_id: int, to_user_id: int, db, settlement_groups=None
+) -> Decimal:
     """Return the remaining amount from this debtor to this creditor for these splits."""
     creditors = []
     debtors = []
-    await get_settlement_creditors_debtors(splits, db, creditors, debtors)
+    await get_settlement_creditors_debtors(
+        splits,
+        db,
+        creditors,
+        debtors,
+        settlement_groups=settlement_groups,
+    )
 
     amount_owed = Decimal("0")
     creditor_index = 0
@@ -302,6 +354,7 @@ async def _allocate_settlement_splits(
     settlement: Settlement,
     expense_groups,
     db: AsyncSession,
+    settlement_groups=None,
 ):
     remaining_amount = settlement.amount
     created_splits = []
@@ -310,7 +363,13 @@ async def _allocate_settlement_splits(
     for splits in expense_groups:
         creditors = []
         debtors = []
-        await get_settlement_creditors_debtors(splits, db, creditors, debtors)
+        await get_settlement_creditors_debtors(
+            splits,
+            db,
+            creditors,
+            debtors,
+            settlement_groups=settlement_groups,
+        )
         creditor_index = 0
         debtor_index = 0
 
