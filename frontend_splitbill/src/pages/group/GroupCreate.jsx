@@ -212,9 +212,15 @@ function GroupCreate({
   return (
     <div onClick={onClose} className="outer-modal">
       <div className="inner-modal" onClick={(e) => e.stopPropagation()}>
-        {/* Close button */}
-        <button type="button" onClick={onClose} className="cancel-icon">
-          ✕
+
+        {/* close */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close expense summary"
+          className="cancel-icon top-2 right-2"
+        >
+          <i className="fa-solid fa-xmark" aria-hidden="true" />
         </button>
 
         <h1 className="heading glittery-shadow pt-0 pb-5">
@@ -223,9 +229,7 @@ function GroupCreate({
         <div>
           <form action="" className="space-y-5">
             {/* frontend errors */}
-            {frontErrors.length > 0 && (
-              <Error errors={frontErrors} />
-            )}
+            {frontErrors.length > 0 && <Error errors={frontErrors} />}
 
             {/* backend errors */}
             {Object.keys(backErrors).length !== 0 && (

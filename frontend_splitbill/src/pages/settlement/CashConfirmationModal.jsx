@@ -4,17 +4,19 @@ function CashConfirmationModal({onClose, firstMessage, secondMessage, onSubmit})
   return (
     <div className="outer-modal">
       <div
-        className="inner-modal max-w-sm space-y-4 p-6"
+        className="inner-modal max-w-sm p-8"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
         <button
           type="button"
           onClick={onClose}
-          className="cancel-icon"
+          className="cancel-icon absolute !top-6"
         >
-          ✕
+          <i className="fa-solid fa-xmark" aria-hidden="true" />
         </button>
+
+        <div className="flex flex-col gap-4">
 
         <h1 className="glittery-shadow text-center text-lg font-semibold">
           Cash settlement confirmation
@@ -31,6 +33,7 @@ function CashConfirmationModal({onClose, firstMessage, secondMessage, onSubmit})
         >
           Got it
         </button>
+        </div>
       </div>
     </div>
   );

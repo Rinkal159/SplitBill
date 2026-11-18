@@ -18,7 +18,7 @@ function ExpenseSettlement({
   loadExpenses,
   setExpenseLoading,
   loadSentSettlementReuqests,
-  loadDashboardData
+  loadDashboardData,
 }) {
   // today local date
   const localToday = getTodayDate();
@@ -144,9 +144,15 @@ function ExpenseSettlement({
         className="inner-modal max-w-lg p-6"
         onClick={(event) => event.stopPropagation()}
       >
-        <button type="button" onClick={onClose} className="cancel-icon">
-          ✕
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close expense summary"
+          className="cancel-icon"
+        >
+          <i className="fa-solid fa-xmark" aria-hidden="true" />
         </button>
+        
         <p className="text-center text-sm text-slate-500">
           Settle <span className="glittery-shadow">{expenseTitle}</span>
         </p>
