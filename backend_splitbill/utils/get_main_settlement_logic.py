@@ -6,9 +6,10 @@ from backend_splitbill.utils.get_creditors_debtors import get_creditors_debtors
 async def get_main_settlement_logic(expense_groups, db, you, other):
     settlements = []
     total_balance = Decimal("0")
+    all_splits = [split for splits in expense_groups for split in splits]
+    settlement_groups = await get_settlement_groups(all_splits, db)
 
     for splits in expense_groups:
-        settlement_groups = await get_settlement_groups(splits, db)
         expense = splits[0].expense
 
         creditors = {}
