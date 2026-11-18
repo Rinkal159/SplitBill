@@ -17,6 +17,7 @@ import Loading from "../loading/Loading";
 import Error from "../error/Error";
 import getBackendError from "../../utils/getBackendError";
 import CashSettlementRequests from "../settlement/CashSettlementRequests";
+import SettlementHistory from "../settlement/SettlementHistory";
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState({});
@@ -117,8 +118,10 @@ function Dashboard() {
   // when user invites a friend, getSentFriendInvitations() should load again
   const getSentFriendInvitations = async () => {
     try {
-      const response = await api.get("/friends/invitations/sent");
-      setSentInvitations(response.data);
+      const response = await api.get("/friends/invitations/sent/page", {
+        params: { page: 1, limit: 10 },
+      });
+      setSentInvitations(response.data.items);
 
       setLoading((prevLoading) => ({
         ...prevLoading,
@@ -136,8 +139,10 @@ function Dashboard() {
   // when user creates a group and sent invitations initially, it should load again
   const getSentGroupInvitations = async () => {
     try {
-      const response = await api.get("/groups/invitations/sent");
-      setSentGroupInvitations(response.data);
+      const response = await api.get("/groups/invitations/sent/page", {
+        params: { page: 1, limit: 10 },
+      });
+      setSentGroupInvitations(response.data.items);
 
       setLoading((prevLoading) => ({
         ...prevLoading,
@@ -154,8 +159,10 @@ function Dashboard() {
 
   const getSentSettlementRequests = async () => {
     try {
-      const res = await api.get("/settlements/requests/sent");
-      setSentSettlementRequests(res.data);
+      const res = await api.get("/settlements/requests/sent/page", {
+        params: { page: 1, limit: 10 },
+      });
+      setSentSettlementRequests(res.data.items);
       setLoading((prevLoading) => ({
         ...prevLoading,
         sentSettlementRequests: false,
@@ -165,13 +172,44 @@ function Dashboard() {
     }
   };
 
+  const loadDashboardBootstrap = async () => {
+    try {
+      const response = await api.get("/dashboard");
+      const data = response.data;
+
+      setDashboardData({
+        ...data.dashboard,
+        total_balance:
+          data.dashboard.total_lendings - data.dashboard.total_borrowings,
+      });
+      setFriends(data.friends);
+      setGroups(data.groups);
+      setSentInvitations([]);
+      setSentGroupInvitations([]);
+      setSentSettlementRequests([]);
+      setLoading({
+        dashboard: false,
+        friends: false,
+        groups: false,
+        sentFriendInvitations: false,
+        sentGroupInvitations: false,
+        sentSettlementRequests: false,
+      });
+    } catch (error) {
+      setBackErrors(getBackendError(error));
+      setLoading({
+        dashboard: false,
+        friends: false,
+        groups: false,
+        sentFriendInvitations: false,
+        sentGroupInvitations: false,
+        sentSettlementRequests: false,
+      });
+    }
+  };
+
   useEffect(() => {
-    getFriends();
-    getGroups();
-    getSentFriendInvitations();
-    getSentGroupInvitations();
-    getSentSettlementRequests();
-    getDashboardData();
+    loadDashboardBootstrap();
   }, []);
 
   const [activeSubvalue, setActiveSubValue] = useState(null);
@@ -212,6 +250,9 @@ function Dashboard() {
     } else if (subvalue == "Cash Settlement Requests") {
       setactiveSidebarTitle("Settlements");
       setContentRenderer("CashSettlementRequests");
+    } else if (subvalue == "Settlement History") {
+      setactiveSidebarTitle("Settlements");
+      setContentRenderer("SettlementHistory");
     } else {
       if (subvalue.email) {
         onFriendClickEvent(subvalue);
@@ -251,7 +292,12 @@ function Dashboard() {
           />
         );
       case "AllExpenses":
-        return <AllExpenses loadSentSettlementReuqests={getSentSettlementRequests} loadDashboardData={getDashboardData} />;
+        return (
+          <AllExpenses
+            loadSentSettlementReuqests={getSentSettlementRequests}
+            loadDashboardData={getDashboardData}
+          />
+        );
       case "Friends":
         return (
           <Friends
@@ -271,6 +317,9 @@ function Dashboard() {
           <FriendExpenses
             key={`friend-${selectedFriend?.id}`}
             friend={selectedFriend}
+            isGroupOnlySettlement={
+              !friends.some((friend) => friend.id === selectedFriend?.id)
+            }
             loadSentSettlementReuqests={getSentSettlementRequests}
             loadDashboardData={getDashboardData}
           />
@@ -294,6 +343,8 @@ function Dashboard() {
             sentSettlementRequestsLoading={loading.sentSettlementRequests}
           />
         );
+      case "SettlementHistory":
+        return <SettlementHistory />;
       default:
         return null;
     }
@@ -301,10 +352,19 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen">
-      <Navbar />
+      <Navbar
+        dashboardBorrowings={dashboardData.borrowings ?? []}
+        dashboardFriends={friends}
+        loadSentSettlementReuqests={getSentSettlementRequests}
+        loadDashboardData={getDashboardData}
+      />
 
       {Object.keys(backErrors).length !== 0 && (
-        <Error errors={backErrors?.error} type={backErrors?.type} />
+        <Error
+          errors={backErrors?.error}
+          type={backErrors?.type}
+          shouldRoundAllCorners={false}
+        />
       )}
 
       <div className="flex justify-center w-full mx-auto gap-4 ">

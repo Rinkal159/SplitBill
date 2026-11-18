@@ -9,6 +9,9 @@ import Filter from "../group/Filter";
 import Loading from "../loading/Loading";
 import Error from "../error/Error";
 import formatAmount from "../../utils/formatAmount";
+import LoadMore from "../common/LoadMore";
+
+const PAGE_SIZE = 10;
 
 function CashSettlementRequests({
   sentSettlementRequests,
@@ -17,6 +20,11 @@ function CashSettlementRequests({
 }) {
   const [visible, setVisible] = useState("received");
   const [receivedRequests, setReceivedRequests] = useState([]);
+  const [receivedPage, setReceivedPage] = useState(1);
+  const [sentPage, setSentPage] = useState(1);
+  const [receivedHasMore, setReceivedHasMore] = useState(false);
+  const [sentHasMore, setSentHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [groups, setGroups] = useState({});
   const [loading, setLoading] = useState(true);
   const [backErrors, setBackErrors] = useState({});
@@ -43,15 +51,34 @@ function CashSettlementRequests({
     setGroups((previous) => ({ ...previous, ...Object.fromEntries(results) }));
   };
 
-  const getReceivedRequests = async () => {
+  const getReceivedRequests = async (page = 1, append = false) => {
     try {
-      const response = await api.get("/settlements/requests/received");
-      setReceivedRequests(response.data);
-      await loadGroups(response.data);
+      if (append) setLoadingMore(true);
+      const response = await api.get("/settlements/requests/received/page", { params: { page, limit: PAGE_SIZE } });
+      setReceivedRequests((previous) => append ? [...previous, ...response.data.items] : response.data.items);
+      setReceivedPage(response.data.page);
+      setReceivedHasMore(response.data.has_more);
+      await loadGroups(response.data.items);
     } catch (error) {
       setBackErrors(getBackendError(error));
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const getSentRequests = async (page = 1, append = false) => {
+    try {
+      if (append) setLoadingMore(true);
+      const response = await api.get("/settlements/requests/sent/page", { params: { page, limit: PAGE_SIZE } });
+      setSentSettlementRequests((previous) => append ? [...previous, ...response.data.items] : response.data.items);
+      setSentPage(response.data.page);
+      setSentHasMore(response.data.has_more);
+      await loadGroups(response.data.items);
+    } catch (error) {
+      setBackErrors(getBackendError(error));
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -117,7 +144,7 @@ function CashSettlementRequests({
     setFilteredRequests(
       tab === "received" ? receivedRequests : sentSettlementRequests,
     );
-    if (tab === "sent") loadGroups(sentSettlementRequests);
+    if (tab === "sent") getSentRequests();
   };
 
   const openGroup = async (groupId) => {
@@ -182,14 +209,14 @@ function CashSettlementRequests({
 
   return (
     <div>
-      <h1 className="text-2xl glittery-shadow text-center py-4 pt-6">
+      <h1 className="text-2xl heading glittery-shadow text-center py-4 pt-6">
         Cash Settlement Requests
       </h1>
       <div className="flex gap-3 pb-4 px-4">
         <ReceivedAndSentButton
           value="received"
           visible={visible}
-          onClick={() => changeTab("received")}
+          onClick={() => { changeTab("received"); getReceivedRequests(); }}
         />
         <ReceivedAndSentButton
           value="sent"
@@ -339,6 +366,15 @@ function CashSettlementRequests({
           )}
         </>
       )}
+
+      <LoadMore
+        hasMore={visible === "received" ? receivedHasMore : sentHasMore}
+        loading={loadingMore}
+        label="settlement requests"
+        onClick={() => visible === "received"
+          ? getReceivedRequests(receivedPage + 1, true)
+          : getSentRequests(sentPage + 1, true)}
+      />
 
       {showProfileModal && (
         <InviterDetail

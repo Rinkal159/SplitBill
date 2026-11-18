@@ -6,6 +6,9 @@ import InviterDetail from "./InviterDetail";
 import ReceivedAndSentButton from "./ReceivedAndSentButton";
 import Loading from "../loading/Loading";
 import getBackendError from "../../utils/getBackendError";
+import LoadMore from "../common/LoadMore";
+
+const PAGE_SIZE = 10;
 
 export default function FriendsInvitations({
   sentInvitations,
@@ -15,6 +18,11 @@ export default function FriendsInvitations({
 }) {
   const [visible, setVisible] = useState("received");
   const [receivedInvitations, setReceivedInvitations] = useState([]);
+  const [receivedPage, setReceivedPage] = useState(1);
+  const [sentPage, setSentPage] = useState(1);
+  const [receivedHasMore, setReceivedHasMore] = useState(false);
+  const [sentHasMore, setSentHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   // sentInvitations state is in Dashboard
   const [showProfileModal, setShowProfileModal] = useState([false, null]);
 
@@ -27,10 +35,13 @@ export default function FriendsInvitations({
   // error
   const [backErrors, setBackErrors] = useState({});
 
-  const getReceivedInvitations = async () => {
+  const getReceivedInvitations = async (page = 1, append = false) => {
     try {
-      const response = await api.get("/friends/invitations/received");
-      setReceivedInvitations(response.data);
+      if (append) setLoadingMore(true);
+      const response = await api.get("/friends/invitations/received/page", { params: { page, limit: PAGE_SIZE } });
+      setReceivedInvitations((previous) => append ? [...previous, ...response.data.items] : response.data.items);
+      setReceivedPage(response.data.page);
+      setReceivedHasMore(response.data.has_more);
 
       setLoading((prevLoading) => ({
         ...prevLoading,
@@ -38,6 +49,24 @@ export default function FriendsInvitations({
       }));
     } catch (error) {
       setBackErrors(getBackendError(error));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const getSentInvitations = async (page = 1, append = false) => {
+    try {
+      if (append) setLoadingMore(true);
+      else setLoading((prev) => ({ ...prev, sent: true }));
+      const response = await api.get("/friends/invitations/sent/page", { params: { page, limit: PAGE_SIZE } });
+      setSentInvitations((previous) => append ? [...previous, ...response.data.items] : response.data.items);
+      setSentPage(response.data.page);
+      setSentHasMore(response.data.has_more);
+    } catch (error) {
+      setBackErrors(getBackendError(error));
+    } finally {
+      setLoading((prev) => ({ ...prev, sent: false }));
+      setLoadingMore(false);
     }
   };
 
@@ -81,7 +110,7 @@ export default function FriendsInvitations({
 
   return (
     <div className="">
-      <h1 className="text-2xl glittery-shadow text-center py-4 pt-6">
+      <h1 className="text-2xl heading glittery-shadow text-center py-4 pt-6">
         Friends Invitations
       </h1>
 
@@ -90,12 +119,12 @@ export default function FriendsInvitations({
         <ReceivedAndSentButton
           value={"received"}
           visible={visible}
-          onClick={() => setVisible("received")}
+          onClick={() => { setVisible("received"); if (!loading.received) getReceivedInvitations(); }}
         />
         <ReceivedAndSentButton
           value={"sent"}
           visible={visible}
-          onClick={() => setVisible("sent")}
+          onClick={() => { setVisible("sent"); getSentInvitations(); }}
         />
       </div>
 
@@ -163,7 +192,7 @@ export default function FriendsInvitations({
             </h1>
           )
         ) : // sent invitations
-        sentFriendInvitationsLoading ? (
+        (loading.sent || sentFriendInvitationsLoading) ? (
           <div className="flex justify-center">
             <Loading msg={"Sent friend invitations"} padding={false} />
           </div>
@@ -221,6 +250,15 @@ export default function FriendsInvitations({
           </h1>
         )}
       </main>
+
+      <LoadMore
+        hasMore={visible === "received" ? receivedHasMore : sentHasMore}
+        loading={loadingMore}
+        label="invitations"
+        onClick={() => visible === "received"
+          ? getReceivedInvitations(receivedPage + 1, true)
+          : getSentInvitations(sentPage + 1, true)}
+      />
 
       {showProfileModal[0] && (
         <InviterDetail
