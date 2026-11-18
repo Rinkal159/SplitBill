@@ -6,11 +6,29 @@ import Loading from "../loading/Loading.jsx";
 import getBackendError from "../../utils/getBackendError.js";
 import formatAmount from "../../utils/formatAmount.js";
 import ExpenseSettlement from "../settlement/ExpenseSettlement.jsx";
+import ExpenseSplitsSummary from "./ExpenseSplitsSummary.jsx";
+import LoadMore from "../common/LoadMore.jsx";
+import Error from "../error/Error.jsx";
+import { useNavigate } from "react-router-dom";
 
-export default function AllExpenses({ loadSentSettlementReuqests, loadDashboardData }) {
+const PAGE_SIZE = 10;
+
+export default function AllExpenses({
+  loadSentSettlementReuqests,
+  loadDashboardData,
+}) {
   const { user } = useContext(AuthContext);
   const [expenses, setExpenses] = useState({});
   const [openExpense, setOpenExpense] = useState(null);
+  const [expenseSummary, setExpenseSummary] = useState(null);
+  const [deleteMessage, setDeleteMessage] = useState("");
+  const navigate = useNavigate();
+
+  const deleteExpense = async (event, id) => {
+    event.stopPropagation();
+    try { await api.delete(`/expenses/${id}`); setDeleteMessage(""); await getExpenses(); }
+    catch (error) { setDeleteMessage(getBackendError(error).error?.[0] || "This expense has unsettled amounts. Settle all balances before deleting it."); }
+  };
 
   // settlement
   const [showExpensewiseSettlementModal, setShowExpensewiseSettlementModal] =
@@ -23,18 +41,30 @@ export default function AllExpenses({ loadSentSettlementReuqests, loadDashboardD
 
   // loading
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(1);
 
   // error
   const [backErrors, setBackErrors] = useState({});
 
-  const getExpenses = async () => {
+  const getExpenses = async (nextPage = 1, append = false) => {
     try {
-      const response = await api.get("/expenses");
-      setExpenses(response.data);
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      const response = await api.get("/expenses", { params: { page: nextPage, limit: PAGE_SIZE } });
+      setExpenses((previous) => ({
+        ...response.data,
+        expenses: append ? [...(previous.expenses ?? []), ...response.data.expenses] : response.data.expenses,
+      }));
+      setPage(response.data.page);
+      setHasMore(response.data.has_more);
       setLoading(false);
     } catch (error) {
-      setLoading(true);
+      if (!append) setLoading(false);
       setBackErrors(getBackendError(error));
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -203,9 +233,23 @@ export default function AllExpenses({ loadSentSettlementReuqests, loadDashboardD
                   <hr className="border-slate-200" />
 
                   {/* Expense Splits */}
-                  <h1 className="pt-4 text-md font-semibold text-slate-600">
-                    Expense splits :
-                  </h1>
+                  <div className="flex justify-between items-center mt-2">
+                    <h1 className="text-md font-semibold text-slate-600">
+                      Expense summary :
+                    </h1>
+                    <div className="group text-slate-700">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpenseSummary(expense);
+                        }}
+                        className="font-semibold  pr-1 group-hover:underline"
+                      >
+                        Expense splits
+                      </button>
+                      <i class="fa-solid fa-arrow-right-long relative top-0.5 trans group-hover:translate-x-0.5"></i>
+                    </div>
+                  </div>
 
                   {expense.your_actual_settlements.length === 0 &&
                     expense.others_actual_settlements.length === 0 && (
@@ -293,10 +337,10 @@ export default function AllExpenses({ loadSentSettlementReuqests, loadDashboardD
                   )}
 
                   {/* Actions */}
-                  <div className="flex gap-2 py-4">
+                  <div className="flex flex-wrap gap-2 py-4">
                     {user.id == expense.expense.created_by && (
                       <button
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/expenses/${expense.expense.id}/edit`); }}
                         className="invitation-btn edit-text edit-btn-shadow"
                       >
                         Edit expense
@@ -322,7 +366,7 @@ export default function AllExpenses({ loadSentSettlementReuqests, loadDashboardD
 
                     {user.id == expense.expense.created_by && (
                       <button
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => deleteExpense(e, expense.expense.id)}
                         className="invitation-btn reject-text reject-btn-shadow"
                       >
                         Delete expense
@@ -336,6 +380,10 @@ export default function AllExpenses({ loadSentSettlementReuqests, loadDashboardD
         })}
       </div>
 
+      <LoadMore hasMore={hasMore} loading={loadingMore} label="expenses" onClick={() => getExpenses(page + 1, true)} />
+
+      {deleteMessage && <div className="outer-modal" onClick={() => setDeleteMessage("")}><div className="inner-modal max-w-md p-6" onClick={(e) => e.stopPropagation()}><button className="cancel-icon top-2 right-2" onClick={() => setDeleteMessage("")} aria-label="Close"><i className="fa-solid fa-xmark" /></button><h2 className="heading glittery-shadow">Expense can’t be deleted</h2><p className="py-4 text-center text-slate-600">{deleteMessage}</p><button className="invitation-btn edit-text edit-btn-shadow" onClick={() => setDeleteMessage("")}>Got it</button></div></div>}
+
       {showExpensewiseSettlementModal && (
         <ExpenseSettlement
           expenseId={showExpensewiseSettlementModal.expense.id}
@@ -346,6 +394,13 @@ export default function AllExpenses({ loadSentSettlementReuqests, loadDashboardD
           loadExpenses={getExpenses}
           loadSentSettlementReuqests={loadSentSettlementReuqests}
           loadDashboardData={loadDashboardData}
+        />
+      )}
+
+      {expenseSummary && (
+        <ExpenseSplitsSummary
+          expense={expenseSummary}
+          onClose={() => setExpenseSummary(null)}
         />
       )}
     </div>
