@@ -58,7 +58,7 @@ function Login() {
 
       <div className="flex justify-center">
         {/* Left Column — Login Form */}
-        <div className="w-full sm:w-1/2 lg:w-1/3 max-w-lg m-8 flex justify-center lg:px-0 px-6 py-10 lg:py-16 bg-white border border-blue-100/60 shadow-xl shadow-blue-100/80 bg-gradient-to-br from-blue-50/60 via-white to-blue-50/60">
+        <div className="w-full sm:w-1/2 lg:w-1/3 max-w-lg m-8 flex justify-center lg:px-0 px-6 py-10 lg:py-16 border border-blue-100/60 shadow-xl shadow-blue-100/80 bg-gradient-to-br from-blue-50/60 via-white to-blue-50/60">
           <div>
             <div className="mb-8 place-self-center text-center">
               <h2 className="text-2xl font-normal text-slate-800 tracking-tight">

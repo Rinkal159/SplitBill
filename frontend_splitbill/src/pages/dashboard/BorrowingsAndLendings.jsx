@@ -4,26 +4,26 @@ function BorrowingsAndLendings({ dashboardData, onUserClick }) {
   return (
     <div>
       {/* balances */}
-      <div className="bg-gradient-to-b from-sky-300 to-blue-700 p-5 text-white shadow-lg rounded-tl-2xl rounded-tr-2xl">
+      <div className="bg-gradient-to-b from-blue-600 to-sky-300 p-5 text-white shadow-lg rounded-tl-2xl rounded-tr-2xl">
         <div className="flex items-end justify-around mt-2">
           <div className="flex flex-col items-center">
-            <p className="text-sm text-blue-100 text-center">You borrowed</p>
-            <span className="text-xl">
+            <p className="text-sm text-blue-100 text-center font-semibold">You borrowed</p>
+            <span className="text-xl font-semibold">
               - ₹{formatAmount(dashboardData.total_borrowings)}
             </span>
           </div>
 
           <div className="flex flex-col items-center">
-            <p className="text-sm text-blue-100 text-center">Total balance</p>
-            <h2 className="text-3xl font-semibold">
+            <p className="text-sm text-blue-100 font-medium text-center">Total balance</p>
+            <h2 className="text-3xl font-bold">
               {dashboardData.total_balance > 0 ? "+" : "-"}&nbsp;₹
               {formatAmount(Math.abs(dashboardData.total_balance))}
             </h2>
           </div>
 
           <div className="flex flex-col items-center">
-            <p className="text-sm text-blue-100 text-center">You lent</p>
-            <span className="text-xl">
+            <p className="text-sm text-blue-100 text-center font-semibold">You lent</p>
+            <span className="text-xl font-semibold">
               + ₹{formatAmount(dashboardData.total_lendings)}
             </span>
           </div>
@@ -35,7 +35,7 @@ function BorrowingsAndLendings({ dashboardData, onUserClick }) {
         {/* Borrowings */}
         <div className="flex-1">
           <div className="flex flex-col items-center w-full">
-            <h1 className="text-2xl font-medium bg-gradient-to-r from-red-500 via-red-400 to-red-600 bg-clip-text text-transparent py-4 text-center px-8">
+            <h1 className="text-2xl font-semibold bg-gradient-to-r from-red-500 via-red-400 to-red-600 bg-clip-text text-transparent py-4 text-center px-8">
               Borrowings
             </h1>
             {dashboardData?.total_borrowings > 0 && (
