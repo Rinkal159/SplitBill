@@ -1,3 +1,4 @@
+
 # SplitBill
 
 A full-stack expense-sharing app for tracking shared costs, managing friend and group expenses, and settling up balances.
@@ -8,17 +9,7 @@ A full-stack expense-sharing app for tracking shared costs, managing friend and 
 
 ## Demo
 
-<!--
-  HOW TO MAKE THE VIDEO PLAY INLINE ON GITHUB
-  1. Open this README on GitHub and click the pencil (edit) icon
-     (or open any Issue / Pull Request comment box).
-  2. Drag and drop docs/splitbill-demo.mp4 into the editor.
-  3. GitHub uploads it and inserts a link like:
-     https://github.com/user-attachments/assets/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-  4. Replace the placeholder line below with that link, on its own line.
--->
-
-https://github.com/user-attachments/assets/REPLACE-WITH-YOUR-UPLOADED-VIDEO-ID
+[https://github.com/user-attachments/assets/REPLACE-WITH-YOUR-UPLOADED-VIDEO-ID](https://github.com/user-attachments/assets/bf97b090-2e62-49bd-ad83-3fe017b4c569)
 
 > If the video doesn't load, you can [download or watch it directly](docs/splitbill-demo.mp4).
 
