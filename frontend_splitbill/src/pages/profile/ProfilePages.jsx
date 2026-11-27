@@ -5,6 +5,7 @@ import { AuthContext } from "../../context/AuthProvider";
 import api from "../../api/axios";
 import getBackendError from "../../utils/getBackendError";
 import Loading from "../loading/Loading";
+import { ThemeContext } from "../../App";
 
 const actionLabels = {
   NAME_UPDATED: "Updated your name",
@@ -18,6 +19,7 @@ const errorMessage = (error) =>
     .join(" ");
 
 function ProfilePages({ profile }) {
+  const { darkMode, setDarkMode } = useContext(ThemeContext);
   const { user, setUser } = useContext(AuthContext);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -121,6 +123,29 @@ function ProfilePages({ profile }) {
               : "Manage your personal details and account security."}
           </p>
         </div>
+
+        {!profile && (
+          <section className="theme-setting mb-6 flex items-center justify-between gap-4 rounded-2xl border border-blue-100/60 bg-white p-5 shadow-sm">
+            <div>
+              <h2 className="font-semibold text-slate-800">Dark theme</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Use a dark blue interface with bright sky-blue accents.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={darkMode}
+              aria-label="Enable dark theme"
+              onClick={() => setDarkMode(!darkMode)}
+              className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${darkMode ? "bg-sky-400" : "bg-slate-300"}`}
+            >
+              <span
+                className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${darkMode ? "translate-x-0" : "-translate-x-5"}`}
+              />
+            </button>
+          </section>
+        )}
 
         {/* profile */}
         {profile && (
@@ -284,7 +309,10 @@ function ProfilePages({ profile }) {
                     {passwordMessage}
                   </p>
                 )}
-                <button className="btn invitation-btn" disabled={savingPassword}>
+                <button
+                  className="btn invitation-btn"
+                  disabled={savingPassword}
+                >
                   {savingPassword ? "Updating…" : "Update password"}
                 </button>
               </form>
