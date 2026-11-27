@@ -8,11 +8,13 @@ from fastapi import (
     File,
     Query,
 )
-from sqlalchemy import select, delete, func, or_, and_
+from datetime import date
+from sqlalchemy import select, delete, func, or_, and_, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend_splitbill.database import get_db
 from backend_splitbill.auth.authentication import get_current_user
 from decimal import Decimal
+from collections import defaultdict
 from backend_splitbill.utils.get_creditors_debtors import get_creditors_debtors
 from backend_splitbill.utils.get_expense_groups import get_expense_groups
 from backend_splitbill.utils.validate_fields import validate_fields
@@ -46,7 +48,6 @@ from backend_splitbill.schemas.expense_schema import (
 from backend_splitbill.schemas.group_schema import GroupDebt as GroupDebtSchema
 from backend_splitbill.schemas.pagination_schema import PaginatedResponse
 from backend_splitbill.model import (
-    Friends,
     User,
     Expense,
     ExpenseSplits,
@@ -54,6 +55,8 @@ from backend_splitbill.model import (
     ExpenseHistoryAction,
     GroupMember,
     Group,
+    Settlement,
+    SettlementStatus,
 )
 
 expense_router = APIRouter(prefix="/api/expenses", tags=["Expenses"])
@@ -69,7 +72,9 @@ async def get_group_settlement_balances(
         select(Group).where(Group.id == group_id, Group.is_deleted.is_(False))
     )
     if group is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Group not found"
+        )
 
     member = await db.scalar(
         select(GroupMember).where(
@@ -105,10 +110,14 @@ async def get_group_settlement_balances(
 
             if creditor["user"].id == current_user.id:
                 other_id = debtor["user"].id
-                friend_balances[other_id] = friend_balances.get(other_id, Decimal("0")) + transfer
+                friend_balances[other_id] = (
+                    friend_balances.get(other_id, Decimal("0")) + transfer
+                )
             elif debtor["user"].id == current_user.id:
                 other_id = creditor["user"].id
-                friend_balances[other_id] = friend_balances.get(other_id, Decimal("0")) - transfer
+                friend_balances[other_id] = (
+                    friend_balances.get(other_id, Decimal("0")) - transfer
+                )
 
             creditor["balance"] -= transfer
             debtor["balance"] += transfer
@@ -147,7 +156,7 @@ async def add_expense_api(
     new_expense = Expense(
         group_id=expense.group_id,
         title=expense.title,
-        description=expense.description,
+        category=expense.category,
         note=expense.note,
         total_amount=expense.total_amount,
         split_method=expense.split_method,
@@ -162,7 +171,7 @@ async def add_expense_api(
         expense_id=new_expense.id,
         group_id=new_expense.group_id,
         expense_title=new_expense.title,
-        expense_description=new_expense.description,
+        expense_description=None,
         expense_total_amount=new_expense.total_amount,
         expense_expense_date=new_expense.expense_date,
         action=ExpenseHistoryAction.CREATED,
@@ -379,7 +388,7 @@ async def get_expense_for_edit(
             Expense.id,
             Expense.group_id,
             Expense.title,
-            Expense.description,
+            Expense.category,
             Expense.note,
             Expense.total_amount,
             Expense.expense_date,
@@ -392,7 +401,9 @@ async def get_expense_for_edit(
     )
     expense = expense_result.mappings().one_or_none()
     if not expense:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found"
+        )
     if expense["created_by"] != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -419,7 +430,7 @@ async def get_expense_for_edit(
         "id": expense["id"],
         "group": group,
         "title": expense["title"],
-        "description": expense["description"],
+        "category": expense["category"],
         "note": expense["note"],
         "total_amount": expense["total_amount"],
         "expense_date": expense["expense_date"],
@@ -432,6 +443,198 @@ async def get_expense_for_edit(
             }
             for split in splits_result
         ],
+    }
+
+
+# * get total expenses and total settlements
+@expense_router.get("/total")
+async def get_total_expenses_and_settlements_api(
+    start_date: date = Query(...),
+    end_date: date = Query(...),
+    group_id: int | None = Query(default=None, gt=0),
+    friend_id: int | None = Query(default=None, gt=0),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if group_id is not None and friend_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Choose either group_id or friend_id",
+        )
+    if end_date < start_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="end_date must be on or after start_date",
+        )
+
+    expense_scope = [
+        Expense.expense_date >= start_date,
+        Expense.expense_date <= end_date,
+        select(ExpenseSplits.id)
+        .where(
+            ExpenseSplits.expense_id == Expense.id,
+            ExpenseSplits.user_id == current_user.id,
+        )
+        .correlate(Expense)
+        .exists(),
+    ]
+
+    if group_id is not None:
+        is_member = await db.scalar(
+            select(GroupMember).where(
+                GroupMember.group_id == group_id,
+                GroupMember.user_id == current_user.id,
+            )
+        )
+        if is_member is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a member of this group",
+            )
+        expense_scope.append(Expense.group_id == group_id)
+    elif friend_id is not None:
+        if friend_id == current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="friend_id must refer to another user",
+            )
+        friend_in_expense = (
+            select(ExpenseSplits.id)
+            .where(
+                ExpenseSplits.expense_id == Expense.id,
+                ExpenseSplits.user_id == friend_id,
+            )
+            .correlate(Expense)
+            .exists()
+        )
+        expense_scope.append(friend_in_expense)
+
+    # total expenses
+    matching_expenses = (
+        select(Expense.id, Expense.total_amount).where(*expense_scope).subquery()
+    )
+
+    total_query = select(func.coalesce(func.sum(matching_expenses.c.total_amount), 0))
+    total_expenses = (await db.execute(total_query)).scalar_one()
+
+    # shares, payings, and remaining debt after settlement allocations
+    splits_query = select(
+        func.coalesce(func.sum(ExpenseSplits.share_amount), 0).label("total_share"),
+        func.coalesce(func.sum(ExpenseSplits.paid_amount), 0).label("total_paid"),
+    ).where(
+        ExpenseSplits.expense_id.in_(select(matching_expenses.c.id)),
+        ExpenseSplits.user_id == current_user.id,
+    )
+
+    splits_result = await db.execute(splits_query)
+    total_share, total_paid = splits_result.one()
+
+    period_expense_ids = (
+        (await db.execute(select(matching_expenses.c.id))).scalars().all()
+    )
+    expense_groups = await get_expense_groups(
+        expense_ids=period_expense_ids,
+        db=db,
+        newest_first=True,
+    )
+    all_splits = [split for splits in expense_groups for split in splits]
+    settlement_groups = await get_settlement_groups(
+        all_splits,
+        db,
+    )
+
+    total_balance = Decimal("0")
+
+    if friend_id is not None:
+        friend_summary = await get_friend_settlement_data(
+            friend_id=friend_id,
+            db=db,
+            current_user=current_user,
+            expense_ids={"expense_ids": period_expense_ids},
+            include_expense_summary=False,
+        )
+        friend_balance = friend_summary["friend_balances"].get(friend_id, Decimal("0"))
+        total_borrowings = max(-friend_balance, Decimal("0"))
+        total_lendings = max(friend_balance, Decimal("0"))
+        total_balance = friend_summary["total_balance"]
+    else:
+        balances_by_user = defaultdict(lambda: Decimal("0"))
+        for splits in expense_groups:
+            creditors = {}
+            debtors = {}
+            get_creditors_debtors(splits, creditors, debtors, settlement_groups)
+            creditor_ids = list(creditors)
+            debtor_ids = list(debtors)
+            creditor_index = 0
+            debtor_index = 0
+
+            while creditor_index < len(creditor_ids) and debtor_index < len(debtor_ids):
+                creditor = creditors[creditor_ids[creditor_index]]
+                debtor = debtors[debtor_ids[debtor_index]]
+                transfer = min(creditor["balance"], abs(debtor["balance"]))
+
+                if creditor["user"].id == current_user.id:
+                    balances_by_user[debtor["user"].id] += transfer
+                    total_balance += transfer
+                elif debtor["user"].id == current_user.id:
+                    balances_by_user[creditor["user"].id] -= transfer
+                    total_balance -= transfer
+
+                creditor["balance"] -= transfer
+                debtor["balance"] += transfer
+                if creditor["balance"] <= 0:
+                    creditor_index += 1
+                if debtor["balance"] >= 0:
+                    debtor_index += 1
+
+        total_borrowings = sum(
+            (-balance for balance in balances_by_user.values() if balance < 0),
+            Decimal("0"),
+        )
+        total_lendings = sum(
+            (balance for balance in balances_by_user.values() if balance > 0),
+            Decimal("0"),
+        )
+
+    # category wise spendings
+    category_query = (
+        select(
+            Expense.category.label("category"),
+            func.coalesce(func.sum(ExpenseSplits.share_amount), 0).label("amount"),
+        )
+        .join(ExpenseSplits, ExpenseSplits.expense_id == Expense.id)
+        .where(
+            ExpenseSplits.user_id == current_user.id,
+            *expense_scope,
+        )
+        .group_by(Expense.category)
+        .order_by(func.sum(ExpenseSplits.share_amount).desc())
+    )
+
+    category_result = await db.execute(category_query)
+    rows = category_result.all()
+
+    category_total = sum((row.amount for row in rows), start=Decimal("0"))
+
+    categories = [
+        {
+            "category": row.category,
+            "amount": row.amount,
+            "percentage": (
+                round((row.amount / category_total) * 100, 2) if category_total else 0
+            ),
+        }
+        for row in rows
+    ]
+
+    return {
+        "total_expenses": total_expenses,
+        "your_shares": total_share,
+        "your_payings": total_paid,
+        "total_borrowings": total_borrowings,
+        "total_lendings": total_lendings,
+        "total_balance": total_balance,
+        "categories": categories,
     }
 
 
@@ -611,28 +814,67 @@ async def get_debt_groups_api(
         .order_by(Group.name)
     )
     groups = result.scalars().unique().all()
-    debt_groups = []
+    group_ids = [group.id for group in groups]
+    if not group_ids:
+        return []
 
-    for group in groups:
-        result = await db.execute(
-            select(Expense.id).where(Expense.group_id == group.id)
+    # Collect all group expenses involving the current user in one query.
+    result = await db.execute(
+        select(Expense.group_id, Expense.id)
+        .join(ExpenseSplits, ExpenseSplits.expense_id == Expense.id)
+        .where(
+            Expense.group_id.in_(group_ids),
+            ExpenseSplits.user_id == current_user.id,
         )
-        expense_ids = result.scalars().all()
+        .distinct()
+    )
+    expense_ids_by_group = {}
+    for group_id, expense_id in result.all():
+        expense_ids_by_group.setdefault(group_id, []).append(expense_id)
 
-        if not expense_ids:
+    expense_groups = await get_expense_groups(
+        expense_ids=[item for ids in expense_ids_by_group.values() for item in ids],
+        db=db,
+        newest_first=True,
+    )
+    all_splits = [split for splits in expense_groups for split in splits]
+    settlement_groups = await get_settlement_groups(all_splits, db)
+    balance_by_group = {group_id: Decimal("0") for group_id in group_ids}
+
+    for splits in expense_groups:
+        group_id = splits[0].expense.group_id
+        if group_id is None:
             continue
+        creditors, debtors = {}, {}
+        get_creditors_debtors(splits, creditors, debtors, settlement_groups)
+        creditor_ids, debtor_ids = list(creditors), list(debtors)
+        i = j = 0
+        while i < len(creditor_ids) and j < len(debtor_ids):
+            creditor = creditors[creditor_ids[i]]
+            debtor = debtors[debtor_ids[j]]
+            transfer = min(creditor["balance"], abs(debtor["balance"]))
+            if (
+                creditor["user"].id == current_user.id
+                and debtor["user"].id == friend_id
+            ):
+                balance_by_group[group_id] += transfer
+            elif (
+                debtor["user"].id == current_user.id
+                and creditor["user"].id == friend_id
+            ):
+                balance_by_group[group_id] -= transfer
+            creditor["balance"] -= transfer
+            debtor["balance"] += transfer
+            if creditor["balance"] <= 0:
+                i += 1
+            if debtor["balance"] >= 0:
+                j += 1
 
-        settlement_data = await get_friend_settlement_data(
-            friend_id=friend_id,
-            expense_ids={"expense_ids": expense_ids},
-            db=db,
-            current_user=current_user,
-            include_expense_summary=False,
-        )
-        if settlement_data["total_balance"] < Decimal("0"):
-            debt_groups.append(
-                {"group": group, "debt_amount": abs(settlement_data["total_balance"])}
-            )
+    debt_groups = [
+        {"group": group, "debt_amount": abs(balance_by_group[group.id])}
+        for group in groups
+        if balance_by_group[group.id] < 0
+    ]
 
     return debt_groups
 
@@ -757,7 +999,8 @@ async def getTotalBalanceWithFriend(
 
 # * get total balance with all friends
 @expense_router.get(
-    "/friends/balances/all", response_model=PaginatedResponse[TotalBalanceWithFriendSchema]
+    "/friends/balances/all",
+    response_model=PaginatedResponse[TotalBalanceWithFriendSchema],
 )
 async def getTotalBalanceWithAllFriends(
     page: Annotated[int, Query(ge=1)] = 1,
@@ -772,12 +1015,16 @@ async def getTotalBalanceWithAllFriends(
     if not your_friends:
         return {"items": [], "page": page, "limit": limit, "has_more": False}
 
-    friend_expenses = select(ExpenseSplits.expense_id).where(ExpenseSplits.user_id.in_(your_friends))
+    friend_expenses = select(ExpenseSplits.expense_id).where(
+        ExpenseSplits.user_id.in_(your_friends)
+    )
     result = await db.execute(
-        select(ExpenseSplits.expense_id).where(
+        select(ExpenseSplits.expense_id)
+        .where(
             ExpenseSplits.user_id == current_user.id,
             ExpenseSplits.expense_id.in_(friend_expenses),
-        ).distinct()
+        )
+        .distinct()
     )
     expense_ids = result.scalars().all()
 
@@ -889,20 +1136,30 @@ async def delete_expense_api(
         )
 
     # Expenses with outstanding balances cannot be removed.
-    splits = await get_expense_groups(expense_ids=[expense_id], db=db, newest_first=True)
+    splits = await get_expense_groups(
+        expense_ids=[expense_id], db=db, newest_first=True
+    )
     if splits:
         settlement_groups = await get_settlement_groups(splits=splits[0], db=db)
         creditors, debtors = {}, {}
-        get_creditors_debtors(splits=splits[0], creditors=creditors, debtors=debtors, settlement_groups=settlement_groups)
+        get_creditors_debtors(
+            splits=splits[0],
+            creditors=creditors,
+            debtors=debtors,
+            settlement_groups=settlement_groups,
+        )
         if creditors or debtors:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This expense has unsettled amounts and cannot be deleted. Settle all balances first.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This expense has unsettled amounts and cannot be deleted. Settle all balances first.",
+            )
 
     # creating expense history
     new_expense_history = ExpenseHistory(
         expense_id=expense_id,
         group_id=existed_expense.group_id,
         expense_title=existed_expense.title,
-        expense_description=existed_expense.description,
+        expense_description=None,
         expense_total_amount=existed_expense.total_amount,
         expense_expense_date=existed_expense.expense_date,
         action=ExpenseHistoryAction.DELETED,
@@ -956,8 +1213,8 @@ async def update_expense_api(
 
     # updating expense
     existed_expense.title = expense.title
-    existed_expense.group_id = expense.group_id # type: ignore[call-args]
-    existed_expense.description = expense.description  # type: ignore[call-args]
+    existed_expense.category = expense.category
+    existed_expense.group_id = expense.group_id  # type: ignore[call-args]
     existed_expense.note = expense.note  # type: ignore[call-args]
     existed_expense.total_amount = expense.total_amount
     existed_expense.split_method = expense.split_method
@@ -968,7 +1225,7 @@ async def update_expense_api(
         expense_id=existed_expense.id,
         group_id=existed_expense.group_id,
         expense_title=existed_expense.title,
-        expense_description=existed_expense.description,
+        expense_description=None,
         expense_total_amount=existed_expense.total_amount,
         expense_expense_date=existed_expense.expense_date,
         action=ExpenseHistoryAction.UPDATED,
