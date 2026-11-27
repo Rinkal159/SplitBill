@@ -49,11 +49,26 @@ async def edit_profile_api(
     # exclude non-updated data
     profile_dict = profile.model_dump(exclude_unset=True)
 
+    mobile_number = profile_dict.get("mobile_number")
+    if mobile_number:
+        existing_mobile = await db.execute(
+            select(User.id).where(
+                User.mobile_number == mobile_number,
+                User.id != current_user.id,
+            )
+        )
+        if existing_mobile.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This mobile number is already in use.",
+            )
+
     # profile picture update
     if profilePicture:
         if profilePicture.filename:
-            # destory exising picture
-            delete_picture_from_cloudinary(current_user.profile_picture)
+            # destory exising picture if not default picture
+            if current_user.profile_picture_path != "/default.png":
+                delete_picture_from_cloudinary(current_user.profile_picture)
 
             # upload picture on cloudinary and get the public id
             profile_picture_public_id = upload_picture_on_cloudinary(
@@ -93,7 +108,9 @@ async def change_password_api(
     current_user=Depends(get_current_user),
 ):
     # verify current password
-    is_correct = verify(password.current_password, current_user.password)
+    is_correct = bool(current_user.password) and verify(
+        password.current_password, current_user.password
+    )
     if not is_correct:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Current password is incorrect"
