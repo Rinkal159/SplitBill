@@ -364,7 +364,7 @@ function Navbar({
                 type="button"
                 disabled={loggingOut}
                 onClick={() => setShowLogoutConfirm(false)}
-                className="rounded-xl border border-slate-500 hover:border-slate-400 hover:-translate-y-0.5 trans hover:bg-gradient-to-r from-slate-500 via-slate-400 to-slate-500 hover:bg-clip-border hover:text-white px-4 py-2 text-sm text-slate-600 hover:shadow-md"
+                className="slate-text slate-btn-shadow"
               >
                 Cancel
               </button>
