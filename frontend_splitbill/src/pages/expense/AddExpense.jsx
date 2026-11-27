@@ -1,271 +1,176 @@
 import { useContext, useEffect, useState } from "react";
-import Navbar from "../../layout/Navbar";
-import LabelAndInput from "../auth/LabelAndInput";
-import api from "../../api/axios";
-import SelectMenu from "./SelectMenu";
-import { AuthContext } from "../../context/AuthProvider";
-import PayBreakdown from "./PayBreakdown";
-import NavigationState from "./NavigationState";
-import Error from "../error/Error";
+import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
+import {
+  CalendarDays,
+  Check,
+  ChevronDown,
+  CircleDollarSign,
+  CreditCard,
+  FileText,
+  Gift,
+  Plane,
+  ShoppingBag,
+  Utensils,
+  ReceiptText,
+  X,
+} from "lucide-react";
+import api from "../../api/axios";
+import { AuthContext } from "../../context/AuthProvider";
+import SelectMenu from "./SelectMenu";
+import PayBreakdown from "./PayBreakdown";
+import Error from "../error/Error";
 import getBackendError from "../../utils/getBackendError";
+import LabelAndInput from "../auth/LabelAndInput";
+
+const categories = [
+  {
+    value: "Food",
+    label: "Food",
+    Icon: Utensils,
+    color: "text-orange-500",
+    bg: "bg-orange-50",
+  },
+  {
+    value: "Shopping",
+    label: "Shopping",
+    Icon: ShoppingBag,
+    color: "text-violet-500",
+    bg: "bg-violet-50",
+  },
+  {
+    value: "Travel",
+    label: "Travel",
+    Icon: Plane,
+    color: "text-sky-600",
+    bg: "bg-sky-50",
+  },
+  {
+    value: "Other",
+    label: "Other",
+    Icon: ReceiptText,
+    color: "text-emerald-600",
+    bg: "bg-emerald-50",
+  },
+];
 
 function AddExpense() {
   const { expenseId } = useParams();
   const isEditing = Boolean(expenseId);
   const { user } = useContext(AuthContext);
-
+  const navigate = useNavigate();
   const [addLoading, setAddLoading] = useState(false);
-  const [expenseLoading, setExpenseLoading] = useState(Boolean(expenseId));
-
+  const [expenseLoading, setExpenseLoading] = useState(isEditing);
   const [expense, setExpense] = useState({
     title: "",
-    description: "",
     note: "",
-    amount: 0,
-    expense_date: null,
+    amount: "",
+    expense_date: new Date().toISOString().slice(0, 10),
   });
-
-  // error
+  const [category, setCategory] = useState("Other");
+  const [attachment, setAttachment] = useState(null);
   const [frontErrors, setFrontErrors] = useState([]);
   const [backErrors, setBackErrors] = useState({});
-
   const [friendOptions, setFriendOptions] = useState([]);
   const [selectedParticipants, setSelectedParticipants] = useState([
-    {
-      value: user.id,
-      label: "You",
-      isFixed: true,
-    },
+    { value: user.id, label: "You", isFixed: true },
   ]);
-
   const [groupOptions, setGroupOptions] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [memberOptions, setMemberOptions] = useState([]);
-
-  // not a state
-  const paymentOptions = [
-    { value: user.id, label: "You" },
-    ...selectedParticipants.filter(
-      (participant) => participant.value != user.id,
-    ),
-    {
-      value: "multiple",
-      label: "Multiple people",
-    },
-  ];
   const [paidBy, setPaidBy] = useState(null);
   const [payments, setPayments] = useState([]);
-
-  // not a state
-  const splitOptions = [
-    {
-      value: "equal",
-      label: "Split equally",
-    },
-    {
-      value: "amount",
-      label: "Split by expense amounts",
-    },
-    {
-      value: "percentage",
-      label: "Split by percentages",
-    },
-  ];
+  const [paymentModal, setPaymentModal] = useState(false);
+  const [splitModal, setSplitModal] = useState(false);
   const [splitMethod, setSplitMethod] = useState(null);
   const [splitAmounts, setSplitAmounts] = useState([]);
   const [splitPercentages, setSplitPercentages] = useState([]);
-
-  const calcTotal = (items, field) =>
-    items.reduce((total, item) => total + Number(item[field] || 0), 0);
-
-  const totalPayment = calcTotal(payments, "amount");
-  const totalSplitAmount = calcTotal(splitAmounts, "amount");
-  const totalSplitPercentage = calcTotal(splitPercentages, "percentage");
   const expenseAmount = Number(expense.amount);
-
-  const isExpenseComplete = Boolean(
-    expense.title.trim() &&
-    Number.isFinite(expenseAmount) &&
-    expenseAmount > 0 &&
-    expense.expense_date,
+  const totalPayment = payments.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0,
   );
-
-  const paymentTotalMatches = Math.abs(totalPayment - expenseAmount) < 0.005;
-  const hasValidPayer = Boolean(
-    paidBy?.value === "multiple" ||
-    selectedParticipants.some(
-      (participant) => participant.value === paidBy?.value,
-    ),
+  const totalSplitAmount = splitAmounts.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0,
   );
-  const areParticipantsComplete =
-    selectedParticipants.length > 1 && hasValidPayer && paymentTotalMatches;
-
-  const isSplitComplete = Boolean(
-    splitMethod?.value === "equal" ||
-    (splitMethod?.value === "amount" &&
-      Math.abs(totalSplitAmount - expenseAmount) < 0.005) ||
-    (splitMethod?.value === "percentage" &&
-      Math.abs(totalSplitPercentage - 100) < 0.01),
+  const totalSplitPercentage = splitPercentages.reduce(
+    (sum, item) => sum + Number(item.percentage || 0),
+    0,
   );
-
-  const errors = {
-    total_paid:
-      Math.abs(totalPayment - expenseAmount) >= 0.005
-        ? "Total paid amount and Expense amount must be equal."
-        : "",
-
-    total_split_amount:
-      splitMethod &&
-      splitMethod.value === "amount" &&
-      Math.abs(totalSplitAmount - expenseAmount) >= 0.005
-        ? "Total split amount and expense amount must be equal."
-        : "",
-
-    total_split_percentage:
-      splitMethod &&
-      splitMethod.value === "percentage" &&
-      Math.abs(totalSplitPercentage - 100) >= 0.01
-        ? "Total percentage splits must be equal to 100."
-        : "",
-  };
-
-  const navigationStates = [
-    {
-      value: "expense",
-      label: "Expense",
-      handleClick: () => setActiveState("expense"),
-      completed: isExpenseComplete,
-    },
-    {
-      value: "participants",
-      label: "Participants",
-      handleClick: () => setActiveState("participants"),
-      completed: areParticipantsComplete,
-    },
-    {
-      value: "splits",
-      label: "Splits",
-      handleClick: () => setActiveState("splits"),
-      completed: isSplitComplete,
-    },
+  const paymentOptions = [
+    { value: user.id, label: "You" },
+    ...selectedParticipants.filter((p) => p.value !== user.id),
+    { value: "multiple", label: "Multiple people" },
   ];
-
-  const [activeState, setActiveState] = useState("expense");
+  const participantOptions = [
+    ...memberOptions.filter((option) => option.value !== user.id),
+    { value: "__select_all__", label: "Select all", isSelectAll: true },
+  ];
+  const splitOptions = [
+    { value: "equal", label: "Equal" },
+    { value: "percentage", label: "Percentage" },
+    { value: "amount", label: "Custom" },
+  ];
+  const currentCategory =
+    categories.find((item) => item.value === category) || categories[3];
+  const validAmount = Number.isFinite(expenseAmount) && expenseAmount > 0;
+  const toCents = (amount) => Math.round((Number(amount) || 0) * 100);
+  const paymentError =
+    Math.abs(totalPayment - expenseAmount) >= 0.005
+      ? "Total paid amount and Expense amount must be equal."
+      : "";
+  const splitError =
+    splitMethod?.value === "amount" &&
+    toCents(totalSplitAmount) !== toCents(expenseAmount)
+      ? `Custom split amounts must equal the expense amount (₹${(expenseAmount || 0).toFixed(2)}).`
+      : splitMethod?.value === "percentage" &&
+          Math.abs(totalSplitPercentage - 100) >= 0.01
+        ? "Percentages must add up to 100."
+        : "";
+  const splitReady =
+    splitMethod?.value === "equal" ||
+    (splitMethod?.value === "amount" && !splitError) ||
+    (splitMethod?.value === "percentage" && !splitError);
+  const peopleReady =
+    selectedParticipants.length > 1 && Boolean(paidBy) && !paymentError;
+  const canSave =
+    expense.title.trim() &&
+    validAmount &&
+    expense.expense_date &&
+    peopleReady &&
+    splitReady &&
+    !expenseLoading &&
+    !addLoading;
+  const selectedNames = selectedParticipants.map((p) => p.label).join(", ");
 
   useEffect(() => {
-    if (!expenseId) return;
     let ignore = false;
-    const loadExpense = async () => {
+    const loadOptions = async () => {
       try {
-        const response = await api.get(`/expenses/edit/${expenseId}`);
-        const item = response.data;
-        if (!item?.id) throw new Error("Expense details could not be found.");
-        if (ignore) return;
-        const details = item;
-        setExpense({
-          title: details.title,
-          description: details.description || "",
-          note: details.note || "",
-          amount: Number(details.total_amount),
-          expense_date: details.expense_date,
-        });
-        setSelectedGroup(
-          details.group
-            ? { value: details.group.id, label: details.group.name }
-            : null,
-        );
-        setSelectedParticipants(
-          item.expense_splits.map(({ user: participant }) => ({
-            value: participant.id,
-            label: participant.id === user.id ? "You" : participant.name,
-            isFixed: participant.id === user.id,
-          })),
-        );
-        setPayments(
-          item.expense_splits.map((split) => ({
-            id: split.user.id,
-            name: split.user.id === user.id ? "You" : split.user.name,
-            amount: Number(split.paid_amount),
-          })),
-        );
-        const payers = item.expense_splits.filter((split) => Number(split.paid_amount) > 0);
-        setPaidBy(
-          payers.length === 1
-            ? {
-                value: payers[0].user.id,
-                label: payers[0].user.id === user.id ? "You" : payers[0].user.name,
-              }
-            : { value: "multiple", label: "Multiple people" },
-        );
-        setSplitMethod(
-          splitOptions.find(
-            (option) => option.value === details.split_method,
-          ) || null,
-        );
-        if (details.split_method === "amount")
-          setSplitAmounts(
-            item.expense_splits.map((split) => ({
-              id: split.user.id,
-              name: split.user.name,
-              amount: Number(split.split_value || 0),
+        const [friends, groups] = await Promise.all([
+          api.get("/friends/name"),
+          api.get("/groups/name"),
+        ]);
+        if (!ignore) {
+          setFriendOptions(
+            friends.data.map((item) => ({ value: item.id, label: item.name })),
+          );
+          setGroupOptions(
+            groups.data.map((item) => ({
+              value: item.group.id,
+              label: item.group.name,
             })),
           );
-        if (details.split_method === "percentage")
-          setSplitPercentages(
-            item.expense_splits.map((split) => ({
-              id: split.user.id,
-              name: split.user.name,
-              percentage: Number(split.split_value || 0),
-            })),
-          );
+        }
       } catch (error) {
-        if (!ignore) setBackErrors(error.response ? getBackendError(error) : { error: [error.message], type: 404 });
-      } finally {
-        if (!ignore) setExpenseLoading(false);
+        if (!ignore) setBackErrors(getBackendError(error));
       }
     };
-    loadExpense();
+    loadOptions();
     return () => {
       ignore = true;
     };
-  }, [expenseId, user.id]);
-
-  // get friends for participants options
-  const getFriends = async () => {
-    try {
-      const response = await api.get("/friends/name");
-
-      const friendOptionsResponse = response.data.map((friend) => ({
-        value: friend.id,
-        label: friend.name,
-      }));
-
-      setFriendOptions(friendOptionsResponse);
-    } catch (error) {
-      setBackErrors(getBackendError(error));
-    }
-  };
-
-  // get groups in which you're a member
-  const getGroups = async () => {
-    try {
-      const res = await api.get("/groups/name");
-
-      const groupOptionsResponse = res.data.map((group) => ({
-        value: group.group.id,
-        label: group.group.name,
-      }));
-
-      setGroupOptions(groupOptionsResponse);
-    } catch (error) {
-      setBackErrors(getBackendError(error));
-    }
-  };
-
-  useEffect(() => {
-    getFriends();
-    getGroups();
   }, []);
 
   useEffect(() => {
@@ -273,308 +178,461 @@ function AddExpense() {
       setMemberOptions(friendOptions);
       return;
     }
-
     let ignore = false;
-
-    const getMembers = async () => {
-      try {
-        const res = await api.get(`/groups/${selectedGroup.value}`);
-
+    api
+      .get(`/groups/${selectedGroup.value}`)
+      .then((res) => {
+        if (ignore) return;
         if (res.data.total_members <= 1) {
-          if (ignore) return;
           setMemberOptions(friendOptions);
           setSelectedGroup(null);
           setFrontErrors(["Select a group with more than one member."]);
           return;
         }
-
-        if (ignore) return;
         setMemberOptions(
           res.data.group.members.map((member) => ({
             value: member.user.id,
             label: member.user.name,
           })),
         );
-      } catch (error) {
-        if (ignore) return;
-        setMemberOptions(friendOptions);
-        setSelectedGroup(null);
-        setBackErrors(getBackendError(error));
-      }
-    };
-
-    getMembers();
+      })
+      .catch((error) => {
+        if (!ignore) {
+          setMemberOptions(friendOptions);
+          setSelectedGroup(null);
+          setBackErrors(getBackendError(error));
+        }
+      });
     return () => {
       ignore = true;
     };
   }, [selectedGroup, friendOptions]);
 
-  const handleChange = (e, field) => {
-    if (field === "amount" && Number(e.target.value) !== expenseAmount) {
-      setSplitAmounts((previous) =>
-        previous.map((split) => ({ ...split, amount: 0 })),
-      );
-      setSplitPercentages((previous) =>
-        previous.map((split) => ({ ...split, percentage: 0 })),
-      );
-    }
-    setExpense((prevExpense) => ({
-      ...prevExpense,
-      [field]: e.target.value,
-    }));
-  };
-
-  const handlePaidByChange = (selectedOption) => {
-    setPaidBy(selectedOption);
-
-    if (!selectedOption) {
-      setPayments([]);
-      return;
-    }
-
-    setPayments((previousPayments) =>
-      selectedParticipants.map((participant) => {
-        const previous = previousPayments.find(
-          (payment) => payment.id === participant.value,
+  useEffect(() => {
+    if (!expenseId) return;
+    let ignore = false;
+    api
+      .get(`/expenses/edit/${expenseId}`)
+      .then(({ data }) => {
+        if (ignore) return;
+        const details = data;
+        setExpense({
+          title: details.title || "",
+          note: details.note || "",
+          amount: Number(details.total_amount),
+          expense_date: details.expense_date,
+        });
+        setCategory(details.category || "Other");
+        setSelectedGroup(
+          details.group
+            ? { value: details.group.id, label: details.group.name }
+            : null,
         );
-        return {
-          id: participant.value,
-          name: participant.label,
-          amount:
-            selectedOption.value === "multiple"
-              ? (previous?.amount ?? 0)
-              : selectedOption.value === participant.value
-                ? expenseAmount
-                : 0,
-        };
-      }),
-    );
-  };
-
-  const handlePayBreakdownChange = (e, participantId, setter, field) => {
-    setter((prev) =>
-      prev.map((payment) =>
-        payment.id === participantId
-          ? {
-              ...payment,
-              [field]: Number(e.target.value) || 0,
-            }
-          : payment,
-      ),
-    );
-  };
-
-  const handleSplitMethodChange = (selectedOption) => {
-    setSplitMethod(selectedOption);
-  };
+        setSelectedParticipants(
+          data.expense_splits.map(({ user: person }) => ({
+            value: person.id,
+            label: person.id === user.id ? "You" : person.name,
+            isFixed: person.id === user.id,
+          })),
+        );
+        setPayments(
+          data.expense_splits.map((split) => ({
+            id: split.user.id,
+            name: split.user.id === user.id ? "You" : split.user.name,
+            amount: Number(split.paid_amount),
+          })),
+        );
+        const payers = data.expense_splits.filter(
+          (split) => Number(split.paid_amount) > 0,
+        );
+        setPaidBy(
+          payers.length === 1
+            ? {
+                value: payers[0].user.id,
+                label:
+                  payers[0].user.id === user.id ? "You" : payers[0].user.name,
+              }
+            : { value: "multiple", label: "Multiple people" },
+        );
+        const method = details.split_method || "equal";
+        setSplitMethod(splitOptions.find((item) => item.value === method));
+        if (method === "amount")
+          setSplitAmounts(
+            data.expense_splits.map((split) => ({
+              id: split.user.id,
+              name: split.user.name,
+              amount: Number(split.split_value || 0),
+            })),
+          );
+        if (method === "percentage")
+          setSplitPercentages(
+            data.expense_splits.map((split) => ({
+              id: split.user.id,
+              name: split.user.name,
+              percentage: Number(split.split_value || 0),
+            })),
+          );
+      })
+      .catch((error) => {
+        if (!ignore)
+          setBackErrors(
+            error.response
+              ? getBackendError(error)
+              : { error: [error.message], type: 404 },
+          );
+      })
+      .finally(() => {
+        if (!ignore) setExpenseLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [expenseId, user.id]);
 
   useEffect(() => {
-    setSplitAmounts((previous) =>
-      selectedParticipants.map((participant) => ({
-        id: participant.value,
-        name: participant.label,
-        amount:
-          previous.find((split) => split.id === participant.value)?.amount ?? 0,
+    setSplitAmounts((old) =>
+      selectedParticipants.map((p) => ({
+        id: p.value,
+        name: p.label,
+        amount: old.find((x) => x.id === p.value)?.amount ?? 0,
       })),
     );
-    setSplitPercentages((previous) =>
-      selectedParticipants.map((participant) => ({
-        id: participant.value,
-        name: participant.label,
-        percentage:
-          previous.find((split) => split.id === participant.value)
-            ?.percentage ?? 0,
+    setSplitPercentages((old) =>
+      selectedParticipants.map((p) => ({
+        id: p.value,
+        name: p.label,
+        percentage: old.find((x) => x.id === p.value)?.percentage ?? 0,
       })),
     );
-
     if (
       paidBy &&
       paidBy.value !== "multiple" &&
-      !selectedParticipants.some(
-        (participant) => participant.value === paidBy.value,
-      )
+      !selectedParticipants.some((p) => p.value === paidBy.value)
     ) {
       setPaidBy(null);
       setPayments([]);
       return;
     }
-
-    setPayments((previous) =>
-      selectedParticipants.map((participant) => {
-        const previousPayment = previous.find(
-          (payment) => payment.id === participant.value,
-        );
-        return {
-          id: participant.value,
-          name: participant.label,
-          amount:
-            paidBy?.value === "multiple"
-              ? (previousPayment?.amount ?? 0)
-              : paidBy?.value === participant.value
-                ? expenseAmount
-                : 0,
-        };
-      }),
+    setPayments((old) =>
+      selectedParticipants.map((p) => ({
+        id: p.value,
+        name: p.label,
+        amount:
+          paidBy?.value === "multiple"
+            ? (old.find((x) => x.id === p.value)?.amount ?? 0)
+            : paidBy?.value === p.value
+              ? expenseAmount
+              : 0,
+      })),
     );
   }, [selectedParticipants, paidBy, expenseAmount]);
 
-  const navigate = useNavigate();
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    try {
-      setAddLoading(true);
-
-      let expense_splits = [];
-      if (splitMethod.value === "amount") {
-        expense_splits = splitAmounts.map((split) => {
-          return {
-            user_id: split.id,
-            amount: split.amount,
-          };
-        });
-      } else if (splitMethod.value === "percentage") {
-        expense_splits = splitPercentages.map((split) => {
-          return {
-            user_id: split.id,
-            percentage: split.percentage,
-          };
-        });
-      } else {
-        expense_splits = null;
-      }
-      const data = {
-        group_id: selectedGroup ? selectedGroup.value : null,
-        title: expense.title,
-        description: expense.description || null,
-        note: expense.note || null,
-        total_amount: expense.amount,
-        expense_date: expense.expense_date,
-        participants: selectedParticipants.map(
-          (participant) => participant.value,
-        ),
-        payments: payments.map((payment) => ({
-          user_id: payment.id,
-          amount: payment.amount,
+  const handlePaidBy = (option) => {
+    setPaidBy(option);
+    if (option?.value === "multiple") {
+      setPayments((old) =>
+        selectedParticipants.map((p) => ({
+          id: p.value,
+          name: p.label,
+          amount: old.find((x) => x.id === p.value)?.amount ?? 0,
         })),
-        split_method: splitMethod.value,
-        expense_splits: expense_splits,
-      };
-
-      if (isEditing) await api.put(`/expenses/${expenseId}`, data);
-      else await api.post("/expenses", data);
-
-      return navigate("/dashboard");
-    } catch (error) {
-      setAddLoading(false);
-      setBackErrors(getBackendError(error));
+      );
+      setPaymentModal(true);
+    } else {
+      setPaymentModal(false);
+      setPayments(
+        option
+          ? selectedParticipants.map((p) => ({
+              id: p.value,
+              name: p.label,
+              amount: p.value === option.value ? expenseAmount : 0,
+            }))
+          : [],
+      );
     }
   };
 
+  const handleParticipantsChange = (options = []) => {
+    const hasSelectAll = options.some((option) => option.isSelectAll);
+    const nextParticipants = hasSelectAll
+      ? [
+          { value: user.id, label: "You", isFixed: true },
+          ...memberOptions.filter((option) => option.value !== user.id),
+        ]
+      : [
+          { value: user.id, label: "You", isFixed: true },
+          ...options.filter(
+            (option) => !option.isSelectAll && option.value !== user.id,
+          ),
+        ];
+
+    setSelectedParticipants(nextParticipants);
+    if (nextParticipants.length <= 1) {
+      setPaidBy(null);
+      setPayments([]);
+      setPaymentModal(false);
+      setSplitModal(false);
+    }
+  };
+  const handleBreakdownChange = (event, id, setter, field) =>
+    setter((old) =>
+      old.map((item) =>
+        item.id === id
+          ? { ...item, [field]: Number(event.target.value) || 0 }
+          : item,
+      ),
+    );
+  const changeAmount = (value) => {
+    setExpense((old) => ({ ...old, amount: value }));
+    setSplitAmounts((old) => old.map((split) => ({ ...split, amount: 0 })));
+    setSplitPercentages((old) =>
+      old.map((split) => ({ ...split, percentage: 0 })),
+    );
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setFrontErrors([]);
+    if (!expense.title.trim())
+      return setFrontErrors(["Enter an expense title."]);
+    if (!validAmount)
+      return setFrontErrors(["Enter an amount greater than zero."]);
+    if (expense.note.trim() && expense.note.trim().length < 10)
+      return setFrontErrors(["Note must be at least 10 characters."]);
+    if (selectedParticipants.length < 2)
+      return setFrontErrors(["Select at least one other participant."]);
+    if (!paidBy || paymentError)
+      return setFrontErrors([
+        paymentError || "Choose who paid for this expense.",
+      ]);
+    if (!splitMethod || splitError)
+      return setFrontErrors([splitError || "Choose a split method."]);
+    const splitDetails =
+      splitMethod.value === "amount"
+        ? splitAmounts.map((x) => ({ user_id: x.id, amount: x.amount }))
+        : splitMethod.value === "percentage"
+          ? splitPercentages.map((x) => ({
+              user_id: x.id,
+              percentage: x.percentage,
+            }))
+          : null;
+    const body = {
+      group_id: selectedGroup?.value ?? null,
+      title: expense.title.trim(),
+      note: expense.note.trim() || null,
+      total_amount: expenseAmount,
+      expense_date: expense.expense_date,
+      participants: selectedParticipants.map((p) => p.value),
+      payments: payments.map((p) => ({ user_id: p.id, amount: p.amount })),
+      split_method: splitMethod.value,
+      expense_splits: splitDetails,
+      category,
+    };
+    try {
+      setAddLoading(true);
+      const result = isEditing
+        ? await api.put(`/expenses/${expenseId}`, body)
+        : await api.post("/expenses", body);
+      const savedId = expenseId || result.data.id;
+      if (attachment && savedId) {
+        const form = new FormData();
+        form.append("attachment", attachment);
+        await api.post(`/expenses/${savedId}/attachment`, form, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+      navigate("/dashboard");
+    } catch (error) {
+      setBackErrors(getBackendError(error));
+      setAddLoading(false);
+    }
+  };
+
+  const closeModal = () => navigate("/dashboard");
+
   return (
-    <div>
-      <Navbar />
-      <div className="flex justify-center">
-        {/* Left Column — Signup Form */}
-        <div className="w-full max-w-3xl m-8 flex items-start justify-center lg:px-0 px-6 py-6 bg-white border border-blue-100/60 shadow-xl shadow-blue-100/90 bg-gradient-to-br from-blue-50/60 via-white to-blue-50/60">
-          <div className="w-full max-w-2xl">
-            <div className="mb-8 place-self-center text-center">
-              <h2 className="text-2xl glittery-shadow p-2">
-                {isEditing ? "Edit expense" : "Add expense"}
-              </h2>
-              <p className="text-sm text-slate-400 max-w-xs ">
-                {isEditing ? "Update the details and split for this expense." : "Start splitting expenses with friends."}
-              </p>
+    <div className="outer-modal">
+      <div className="inner-modal add-expense-modal-shell max-w-2xl ">
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-expense-title"
+          className="add-expense-modal-content relative flex w-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-blue-100/80 bg-white shadow-2xl shadow-sky-200"
+        >
+          <header className="relative border-b border-slate-100 sm:px-7">
+            <h1
+              id="add-expense-title"
+              className="heading glittery-shadow text-center"
+            >
+              {isEditing ? "Edit expense" : "Add an expense"}
+            </h1>
+            <button
+              type="button"
+              onClick={closeModal}
+              aria-label="Close expense summary"
+              className="cancel-icon"
+            >
+              <i className="fa-solid fa-xmark" aria-hidden="true" />
+            </button>
+          </header>
+          {expenseLoading ? (
+            <div className="p-16 text-center text-sm text-slate-500">
+              Loading expense details…
             </div>
-
-            <form className="space-y-5" onSubmit={handleSubmit}>
-              <div className="flex w-full mb-6">
-                {navigationStates.map((state) => (
-                  <NavigationState
-                    key={state.value}
-                    value={state.value}
-                    label={state.label}
-                    activeState={activeState}
-                    handleClick={state.handleClick}
-                    completed={state.completed}
-                    disabled={
-                      state.value === "participants"
-                        ? !isExpenseComplete
-                        : state.value === "splits"
-                          ? !isExpenseComplete || !areParticipantsComplete
-                          : false
-                    }
-                  />
-                ))}
-              </div>
-
-              <div className="mb-6">
-                {frontErrors.length > 0 && <Error errors={frontErrors} />}
-
-                {Object.keys(backErrors).length !== 0 && (
-                  <Error errors={backErrors.error} type={backErrors.type} />
+          ) : (
+            <form
+              onSubmit={submit}
+              className="add-expense-modal-form min-h-0 flex-1 overflow-y-auto"
+            >
+              {/* error */}
+              <div className="px-5 py-5 sm:px-7 sm:py-6">
+                {(frontErrors.length > 0 ||
+                  Object.keys(backErrors).length > 0) && (
+                  <div className="mb-4">
+                    {frontErrors.length > 0 && <Error errors={frontErrors} />}
+                    {Object.keys(backErrors).length > 0 && (
+                      <Error errors={backErrors.error} type={backErrors.type} />
+                    )}
+                  </div>
                 )}
-              </div>
 
-              {expenseLoading ? (
-                <div className="flex min-h-[350px] items-center justify-center text-sm text-slate-500" role="status">Loading expense details…</div>
-              ) : <div className="min-h-[350px]">
-                {/* Expense details */}
-                {activeState === "expense" && (
-                  <fieldset className="rounded-xl border border-blue-100 bg-white px-6 py-4 pb-6">
-                    <legend className="px-3 text-base font-normal glittery-shadow text-md tracking-wide">
-                      Expense details
-                    </legend>
+                {/** EXPENSE DETAILS */}
+                <fieldset className="rounded-xl border border-blue-100 bg-white px-6 py-4 pb-6">
+                  <legend className="px-3 text-base font-normal glittery-shadow text-md tracking-wide">
+                    Expense details
+                  </legend>
 
-                    {/* title */}
-                    <div>
-                      <LabelAndInput
-                        field={"title"}
-                        labelValue={"Title"}
-                        handleEvent={(e) => handleChange(e, "title")}
-                        type={"text"}
-                        person={expense}
-                        placeholder={"Enter a title"}
-                        required={true}
-                      />
-                    </div>
+                  <div>
+                    <div className="grid gap-5 sm:grid-cols-[190px_1fr]">
+                      <div className="rounded-2xl p-3 flex flex-col gap-4">
+                        {/* Expense icon */}
+                        <div className="flex flex-row items-center gap-3 border border-slate-200 rounded-2xl sm:flex-col sm:justify-center sm:p-4">
+                          <div
+                            className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${currentCategory.bg} ${currentCategory.color}`}
+                          >
+                            <currentCategory.Icon size={30} strokeWidth={1.8} />
+                          </div>
+                          <div className="w-full">
+                            <label
+                              className="form-lbl"
+                              htmlFor="expense-category"
+                            >
+                              Expense category
+                            </label>
+                            <select
+                              id="expense-category"
+                              className="form-input mt-1 !py-2"
+                              value={category}
+                              onChange={(e) => setCategory(e.target.value)}
+                            >
+                              {categories.map((item) => (
+                                <option key={item.value} value={item.value}>
+                                  {item.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
 
-                    {/* description */}
-                    <div className="space-y-2 mt-2">
-                      <label className="form-lbl" htmlFor="description">
-                        Description
-                      </label>
-                      <textarea
-                        className="form-input"
-                        rows={5}
-                        onChange={(e) => handleChange(e, "description")}
-                        value={expense.description}
-                        name="description"
-                        id="description"
-                        placeholder="Enter a description"
-                      ></textarea>
-                    </div>
-
-                    {/* amount and expense date */}
-                    <div className="flex w-full items-start gap-6 mt-2">
-                      {/* Amount */}
-                      <div className="flex-1">
-                        <LabelAndInput
-                          field="amount"
-                          labelValue="Amount"
-                          handleEvent={(e) => handleChange(e, "amount")}
-                          person={expense}
-                          type="number"
-                          placeholder="Enter expense amount"
-                          required={true}
+                        {/* Expense receipt */}
+                        {/* <div className="rounded-2xl shadow-md sm:p-4">
+                        <label
+                          className="form-lbl"
+                          htmlFor="expense-attachment"
+                        >
+                          Receipt image
+                        </label>
+                        <input
+                          id="expense-attachment"
+                          className="form-input mt-1.5 !px-2 !py-1.5 text-xs"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) =>
+                            setAttachment(e.target.files?.[0] || null)
+                          }
                         />
+                        {attachment && (
+                          <p className="mt-1 truncate text-xs text-slate-500">
+                            {attachment.name}
+                          </p>
+                        )}
+                      </div> */}
+                      </div>
+
+                      {/* expense title and amount */}
+                      <div className="min-w-0 space-y-4">
+                        {/* Expense title */}
+                        <LabelAndInput
+                          type={"text"}
+                          field={"title"}
+                          labelValue={"Title"}
+                          required
+                          person={expense}
+                          placeholder={"Exter title"}
+                          handleEvent={(e) => {
+                            setExpense((prevExpense) => ({
+                              ...prevExpense,
+                              title: e.target.value,
+                            }));
+                          }}
+                          autoFocus
+                          showError={false}
+                        />
+
+                        {/* Expense amount */}
+                        <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
+                          <label htmlFor="expense-amount" className="form-lbl">
+                            Amount <span className="text-red-400">*</span>
+                          </label>
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="text-2xl font-medium text-slate-400">
+                              ₹
+                            </span>
+                            <input
+                              id="expense-amount"
+                              className="w-full min-w-0 border-0 bg-transparent text-3xl font-semibold tracking-tight text-slate-600 outline-none placeholder:text-slate-300 focus:ring-0"
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              required
+                              value={expense.amount}
+                              onChange={(e) => changeAmount(e.target.value)}
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* expense note and date */}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {/* Expense note */}
+                      <div className="flex-1 space-y-2">
+                        <label className="form-lbl" htmlFor="expense-note">
+                          Note
+                        </label>
+                        <div className="relative mt-1.5">
+                          <FileText
+                            size={16}
+                            className="pointer-events-none absolute left-3 top-3 text-slate-400"
+                          />
+                          <input
+                            id="expense-note"
+                            className="form-input pl-9 "
+                            maxLength={1000}
+                            value={expense.note}
+                            onChange={(e) =>
+                              setExpense({ ...expense, note: e.target.value })
+                            }
+                            placeholder="Add a note (optional)"
+                          />
+                        </div>
                       </div>
 
                       {/* Expense date */}
                       <div className="flex-1 space-y-2">
                         <label htmlFor="date" className="form-lbl">
-                          Expense date
+                          Date
                           <span className="text-red-400 text-sm">*</span>
                         </label>
 
@@ -584,63 +642,31 @@ function AddExpense() {
                           name="date"
                           id="date"
                           value={expense.expense_date}
-                          onChange={(e) => handleChange(e, "expense_date")}
+                          onChange={(e) =>
+                            setExpense((prevExpense) => ({
+                              ...prevExpense,
+                              expense_date: e.target.value,
+                            }))
+                          }
                           required
                         />
                       </div>
                     </div>
+                  </div>
+                </fieldset>
 
-                    {/* attachment and note */}
-                    <div className="flex w-full items-start gap-6 mt-2">
-                      {/* Attachment */}
-                      <div className="flex-1 space-y-2">
-                        <label htmlFor="attachment" className="form-lbl">
-                          Attachment
-                        </label>
-
-                        <input
-                          className="form-input w-full"
-                          type="file"
-                          accept="image/*"
-                          id="attachment"
-                        />
-                      </div>
-
-                      {/* Note */}
-                      <div className="flex-1">
-                        <LabelAndInput
-                          field="note"
-                          labelValue="Note"
-                          handleEvent={(e) => handleChange(e, "note")}
-                          person={expense}
-                          type="text"
-                          placeholder="Enter a note"
-                        />
-                      </div>
-                    </div>
-                  </fieldset>
-                )}
-
-                {/* Participants */}
-                {activeState === "participants" && (
-                  <div className="space-y-4">
-                    <fieldset className="rounded-xl border border-blue-100 bg-white px-6 py-4 pb-6">
-                      <legend className="px-3 text-base font-normal glittery-shadow text-md tracking-wide">
-                        Group
-                      </legend>
-
+                {/* PARTICIPANTS */}
+                <fieldset className="rounded-xl border border-blue-100 bg-white px-6 py-4 pb-6 mt-2">
+                  <legend className="px-3 text-base font-normal glittery-shadow text-md tracking-wide">
+                    Participants & Splits
+                  </legend>
+                  <div className="">
+                    {/* GROUP */}
+                    <div>
                       <SelectMenu
-                        label={"Choose Group"}
-                        additionalInfo="If it is a group expense"
-                        field={"group"}
                         options={groupOptions}
                         value={selectedGroup}
-                        placeholder={"Select group"}
-                        isMultiSelect={false}
-                        closeMenuOnSelect={true}
-                        required={false}
                         onChange={(group) => {
-                          setFrontErrors([]);
                           if (
                             (group?.value ?? null) !==
                             (selectedGroup?.value ?? null)
@@ -656,143 +682,294 @@ function AddExpense() {
                           }
                           setSelectedGroup(group);
                         }}
+                        field="group"
+                        label="Group"
+                        placeholder="Personal expense if optional"
+                        isMultiSelect={false}
+                        closeMenuOnSelect
+                        required={false}
+                        menuPortalTarget={document.body}
                       />
-                    </fieldset>
-                    <fieldset className="rounded-xl border border-blue-100 bg-white px-6 py-4 pb-6">
-                      <legend className="px-3 text-base font-normal glittery-shadow text-md tracking-wide">
-                        Participants
-                      </legend>
+                    </div>
 
+                    <div className="grid w-full grid-cols-2 items-start gap-4 pt-3">
                       {/* Participants */}
-                      <div className="space-y-1.5">
+                      <div className="min-w-0 w-full">
                         <SelectMenu
-                          options={memberOptions}
+                          options={participantOptions}
                           value={selectedParticipants}
-                          onChange={setSelectedParticipants}
+                          onChange={handleParticipantsChange}
                           field="participants"
                           label="Participants"
-                          placeholder="Search and select participants"
-                          isMultiSelect={true}
-                          closeMenuOnSelect={true}
+                          additionalInfo="Select friends or group members"
+                          placeholder="Select participants"
+                          isMultiSelect
+                          closeMenuOnSelect={false}
+                          required
+                          menuPortalTarget={document.body}
                         />
                       </div>
 
-                      {/* Payments + Payment breakdown */}
-                      <div className="mt-4 flex items-start gap-6">
-                        {/* Payments */}
-                        <div className="flex-1 space-y-1.5">
-                          <SelectMenu
-                            options={paymentOptions}
-                            value={paidBy}
-                            onChange={handlePaidByChange}
-                            field="payment"
-                            label={"Paid by"}
-                            placeholder="Paid by"
-                            isMultiSelect={false}
-                            closeMenuOnSelect={true}
-                          />
-                        </div>
-
-                        {/* Payment breakdown */}
-                        {paidBy && paidBy.value === "multiple" && (
-                          <PayBreakdown
-                            heading={"Payment breakdown"}
-                            desc={"Enter how much each person paid."}
-                            selectedParticipants={selectedParticipants}
-                            idPart={"payment"}
-                            handleChange={handlePayBreakdownChange}
-                            getter={payments}
-                            setter={setPayments}
-                            field={"amount"}
-                            totalHeading={"Total paid"}
-                            totalAmount={totalPayment}
-                            errors={errors.total_paid}
-                            showRupee={true}
-                          />
+                      {/* Paid by */}
+                      <div className="min-w-0 w-full">
+                        <SelectMenu
+                          options={paymentOptions}
+                          value={paidBy}
+                          onChange={handlePaidBy}
+                          field="payment"
+                          label="Paid by"
+                          additionalInfo="Choose who paid this expense."
+                          placeholder={
+                            selectedParticipants.length > 1
+                              ? "Select who paid"
+                              : "Choose participants first"
+                          }
+                          isMultiSelect={false}
+                          closeMenuOnSelect
+                          menuPortalTarget={document.body}
+                          isDisabled={selectedParticipants.length <= 1}
+                        />
+                        {paidBy?.value === "multiple" && (
+                          <button
+                            type="button"
+                            onClick={() => setPaymentModal(true)}
+                            className="mt-2 flex w-full items-center justify-between rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2 text-left text-xs font-medium text-sky-700 hover:bg-sky-50"
+                          >
+                            <span>
+                              Payment breakdown · ₹{totalPayment.toFixed(2)} of
+                              ₹{(expenseAmount || 0).toFixed(2)}
+                            </span>
+                            <ChevronDown size={15} />
+                          </button>
                         )}
                       </div>
-                    </fieldset>
+                    </div>
+
+                    {/* Expense Splits */}
+                    {selectedParticipants.length > 1 && (
+                      <div className="mt-3">
+                        <p className="form-lbl pb-2">
+                          How should it be split?{" "}
+                          <span className="text-red-400 text-sm">*</span>
+                        </p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {splitOptions.map((option) => (
+                            <button
+                              type="button"
+                              key={option.value}
+                              onClick={() => {
+                                setSplitMethod(option);
+                                setSplitModal(option.value !== "equal");
+                              }}
+                              className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition ${splitMethod?.value === option.value ? "border-sky-500 bg-sky-50 text-sky-700 shadow-sm" : "border-slate-200 text-slate-600 hover:border-sky-200 hover:bg-sky-50/40"}`}
+                            >
+                              {splitMethod?.value === option.value && (
+                                <Check size={14} className="mr-1 inline" />
+                              )}
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedParticipants.length > 1 &&
+                      splitMethod &&
+                      splitMethod.value !== "equal" && (
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            onClick={() => setSplitModal(true)}
+                            className="flex w-full items-center justify-between rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-left text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+                          >
+                            <span>
+                              {splitMethod.value === "amount"
+                                ? `Custom split · ₹${totalSplitAmount.toFixed(2)} of ₹${(expenseAmount || 0).toFixed(2)}`
+                                : `Percentage split · ${totalSplitPercentage.toFixed(2)}% of 100%`}
+                            </span>
+                            <ChevronDown size={15} />
+                          </button>
+                          {splitError && (
+                            <p className="mt-1.5 text-xs font-medium text-red-500">
+                              {splitError}
+                            </p>
+                          )}
+                        </div>
+                      )}
                   </div>
-                )}
+                </fieldset>
+              </div>
 
-                {/* Splits */}
-                {activeState === "splits" && (
-                  <fieldset className="rounded-xl border border-blue-100 bg-white px-6 py-4 pb-6">
-                    <legend className="px-3 text-base font-normal glittery-shadow text-md tracking-wide">
-                      Splits
-                    </legend>
-
-                    {/* split method */}
-                    <SelectMenu
-                      options={splitOptions}
-                      value={splitMethod}
-                      onChange={handleSplitMethodChange}
-                      field={"split"}
-                      label={"Split method"}
-                      placeholder={"Choose split method"}
-                      isMultiSelect={false}
-                      closeMenuOnSelect={true}
-                    />
-
-                    {splitMethod && splitMethod.value === "amount" && (
-                      <PayBreakdown
-                        heading={"Split breakdown by amount"}
-                        desc={"Enter how much each person should pay."}
-                        selectedParticipants={selectedParticipants}
-                        idPart={"split-amount"}
-                        handleChange={handlePayBreakdownChange}
-                        getter={splitAmounts}
-                        setter={setSplitAmounts}
-                        field={"amount"}
-                        totalHeading={"Total pay"}
-                        totalAmount={totalSplitAmount}
-                        errors={errors.total_split_amount}
-                        showRupee={true}
-                      />
-                    )}
-
-                    {splitMethod && splitMethod.value === "percentage" && (
-                      <PayBreakdown
-                        heading={"Split breakdown by percentage"}
-                        desc={
-                          "Enter how much each person should pay in percentage."
-                        }
-                        selectedParticipants={selectedParticipants}
-                        idPart={"split-percentage"}
-                        handleChange={handlePayBreakdownChange}
-                        getter={splitPercentages}
-                        setter={setSplitPercentages}
-                        field={"percentage"}
-                        totalHeading={"Total pay by percentage"}
-                        totalAmount={totalSplitPercentage}
-                        errors={errors.total_split_percentage}
-                        showRupee={false}
-                      />
-                    )}
-                  </fieldset>
-                )}
-              </div>}
-
-              {/* Submit Button */}
-              <button
-                disabled={
-                  addLoading ||
-                  expenseLoading ||
-                  !isExpenseComplete ||
-                  !areParticipantsComplete ||
-                  !isSplitComplete ||
-                  Boolean(errors.total_paid) ||
-                  Boolean(errors.total_split_amount) ||
-                  Boolean(errors.total_split_percentage)
-                }
-                className={`btn ${addLoading && `opacity-50`}`}
-                type="submit"
-              >
-                {addLoading ? (isEditing ? "Saving…" : "Adding…") : (isEditing ? "Save changes" : "Add expense")}
-              </button>
+              <footer className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+                <p className="max-w-[65%] truncate text-xs text-slate-500">
+                  {selectedNames || "Select people to share this expense"}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    disabled={addLoading}
+                    className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!canSave}
+                    className="rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-sky-200/70 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {addLoading
+                      ? "Saving…"
+                      : isEditing
+                        ? "Save changes"
+                        : "Save expense"}
+                  </button>
+                </div>
+              </footer>
             </form>
+          )}
+        </section>
+        {paymentModal && (
+          <div
+            className="outer-modal z-[80]"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setPaymentModal(false);
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="payment-breakdown-title"
+              className="w-full max-w-lg rounded-2xl border border-blue-100 bg-white p-5 shadow-2xl sm:p-6"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2
+                    id="payment-breakdown-title"
+                    className="text-lg font-semibold text-slate-800"
+                  >
+                    Payment breakdown
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Enter how much each person paid.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPaymentModal(false)}
+                  aria-label="Close payment breakdown"
+                  className="rounded-full p-2 text-slate-400 hover:bg-slate-100"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <PayBreakdown
+                heading="Amount paid by each person"
+                desc="Amounts must add up to the expense total."
+                selectedParticipants={selectedParticipants}
+                idPart="payment"
+                handleChange={handleBreakdownChange}
+                getter={payments}
+                setter={setPayments}
+                field="amount"
+                totalHeading="Total paid"
+                totalAmount={totalPayment}
+                errors={paymentError}
+                showRupee
+              />
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setPaymentModal(false)}
+                  className="btn invitation-btn edit-text edit-btn-shadow"
+                >
+                  Done
+                </button>
+              </div>
+            </section>
           </div>
-        </div>
+        )}
+        {splitModal && splitMethod?.value !== "equal" && (
+          <div
+            className="outer-modal z-[80]"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setSplitModal(false);
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="split-breakdown-title"
+              className="w-full max-w-lg rounded-2xl border border-blue-100 bg-white p-5 shadow-2xl sm:p-6"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2
+                    id="split-breakdown-title"
+                    className="text-lg font-semibold text-slate-800"
+                  >
+                    {splitMethod?.value === "amount"
+                      ? "Custom split breakdown"
+                      : "Percentage split breakdown"}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {splitMethod?.value === "amount"
+                      ? "Enter each person's share of the expense."
+                      : "Enter the percentage assigned to each person."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSplitModal(false)}
+                  aria-label="Close split breakdown"
+                  className="rounded-full p-2 text-slate-400 hover:bg-slate-100"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              {splitMethod?.value === "amount" ? (
+                <PayBreakdown
+                  heading=""
+                  desc=""
+                  selectedParticipants={selectedParticipants}
+                  idPart="split-amount"
+                  handleChange={handleBreakdownChange}
+                  getter={splitAmounts}
+                  setter={setSplitAmounts}
+                  field="amount"
+                  totalHeading="Total split"
+                  totalAmount={totalSplitAmount}
+                  errors={splitError}
+                  showRupee
+                />
+              ) : (
+                <PayBreakdown
+                  heading=""
+                  desc=""
+                  selectedParticipants={selectedParticipants}
+                  idPart="split-percentage"
+                  handleChange={handleBreakdownChange}
+                  getter={splitPercentages}
+                  setter={setSplitPercentages}
+                  field="percentage"
+                  totalHeading="Total percentage"
+                  totalAmount={totalSplitPercentage}
+                  errors={splitError}
+                  showRupee={false}
+                />
+              )}
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSplitModal(false)}
+                  className="btn invitation-btn edit-text edit-btn-shadow"
+                >
+                  Done
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
       </div>
     </div>
   );
