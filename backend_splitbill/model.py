@@ -11,6 +11,7 @@ from sqlalchemy import (
     Date,
     Enum as SQLAlchemyEnum,
     Boolean,
+    inspect,
 )
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
 from backend_splitbill.env_config import settings
@@ -61,8 +62,8 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(100))
     email: Mapped[str] = mapped_column(String(255), unique=True)
-    password: Mapped[str] = mapped_column(String(255))
-    mobile_number: Mapped[str] = mapped_column(String(10), unique=True)
+    password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    mobile_number: Mapped[str | None] = mapped_column(String(10), unique=True, nullable=True)
     profile_picture: Mapped[str] = mapped_column(
         String(500), nullable=True
     )  # public id
@@ -212,6 +213,33 @@ class User(Base):
         lazy="selectin",
     )
 
+    identities: Mapped[list["UserIdentity"]] = relationship(
+        "UserIdentity",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+class UserIdentity(Base):
+    __tablename__ = "user_identities"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_subject", name="uq_user_identity_provider_subject"),
+        UniqueConstraint("user_id", "provider", name="uq_user_identity_user_provider"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", onupdate="CASCADE", ondelete="CASCADE"), nullable=False
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider_subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user: Mapped["User"] = relationship("User", back_populates="identities")
+
 
 class UserHistoryAction(str, Enum):
     NAME_UPDATED = "NAME_UPDATED"
@@ -313,7 +341,7 @@ class Expense(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(100))
-    description: Mapped[str] = mapped_column(String(1000), nullable=True)
+    category: Mapped[str] = mapped_column(String(20), nullable=False, default="Other", server_default="Other")
     attachment: Mapped[str] = mapped_column(String(500), nullable=True)  # public id
     note: Mapped[str] = mapped_column(String(1000), nullable=True)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
