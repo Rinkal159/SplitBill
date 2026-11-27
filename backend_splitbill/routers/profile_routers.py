@@ -67,7 +67,7 @@ async def edit_profile_api(
     if profilePicture:
         if profilePicture.filename:
             # destory exising picture if not default picture
-            if current_user.profile_picture_path != "/default.png":
+            if current_user.profile_picture_path != "/default_profile_picture.png":
                 delete_picture_from_cloudinary(current_user.profile_picture)
 
             # upload picture on cloudinary and get the public id

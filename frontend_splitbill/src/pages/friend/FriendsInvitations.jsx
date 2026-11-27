@@ -213,7 +213,7 @@ export default function FriendsInvitations({
                     src={
                       invitation.invitee
                         ? invitation.invitee.profile_picture_path
-                        : "/guest.jpg"
+                        : "/guest_profile_picture.jpg"
                     }
                     alt={invitation.invitee ? invitation.invitee.name : "Guest"}
                   ></img>{" "}

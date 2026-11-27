@@ -206,7 +206,7 @@ function Activities({setBackErrors}) {
               <div className="relative flex-shrink-0 w-[70px] h-[65px]">
                 <ActivityTypeIcon activity={activity} />
                 <img
-                  src={performer?.profile_picture_path || "/default.png"}
+                  src={performer?.profile_picture_path || "/default_profile_picture.png"}
                   alt={
                     performer?.name
                       ? `${performer.name}'s profile`

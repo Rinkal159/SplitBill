@@ -79,7 +79,7 @@ class User(Base):
         if self.profile_picture:
             url, _ = cloudinary_url(self.profile_picture)
             return url
-        return "/default.png"
+        return "/default_profile_picture.png"
 
     # otps sent to reset the password
     password_reset_otps: Mapped[list["PasswordResetOTP"]] = relationship(

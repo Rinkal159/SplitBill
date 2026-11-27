@@ -392,7 +392,7 @@ function GroupInvitations({
                           invite.invitee && setShowProfileModal([true, invite]);
                         }}
                         src={
-                          invite.invitee?.profile_picture_path || "/guest.jpg"
+                          invite.invitee?.profile_picture_path || "/guest_profile_picture.jpg"
                         }
                         alt={invite.invitee?.name || "Invited person"}
                         className={`absolute right-1 bottom-0
