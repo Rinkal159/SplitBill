@@ -8,7 +8,7 @@ from backend_splitbill.schemas.friends_schema import (
     UserDetail as UserDetailSchema,
 )
 from backend_splitbill.schemas.group_schema import (
-    GroupResponse as GroupResponseSchema,
+    GroupNameResponse as GroupNameResponseSchema,
     SentInvitationRespose as SentGroupInvitationResponseSchema,
 )
 from backend_splitbill.schemas.settlement_schema import (
@@ -21,7 +21,7 @@ class DashboardBootstrapResponse(BaseModel):
 
     dashboard: BorrowingsAndLendingsSchema
     friends: list[UserDetailSchema]
-    groups: list[GroupResponseSchema]
+    groups: list[GroupNameResponseSchema]
     sent_friend_invitations: list[InvitationSentResponseSchema] = Field(default_factory=list)
     sent_group_invitations: list[SentGroupInvitationResponseSchema] = Field(default_factory=list)
     sent_settlement_requests: list[SettlementRequestResponseSchema] = Field(default_factory=list)
