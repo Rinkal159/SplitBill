@@ -12,7 +12,7 @@
     }
 
     .form-input {
-        @apply w-full px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 hover:border-[#60a5fa]
+        @apply w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 hover:border-[#60a5fa]
     }
 
     .form-lbl {
@@ -73,6 +73,10 @@
         @apply font-medium bg-gradient-to-r from-slate-500 via-slate-400 to-slate-600 bg-clip-text text-transparent
     }
 
+    .slate-btn-shadow {
+        @apply rounded-xl border border-slate-500 hover:border-slate-400 hover:-translate-y-0.5 trans hover:bg-gradient-to-r from-slate-500 via-slate-400 to-slate-500 hover:bg-clip-border hover:text-white px-4 py-2 text-sm text-slate-600 hover:shadow-md
+    }
+
 
     /** AddExpense */
     .normal-state {
@@ -110,11 +114,11 @@
 
     /** modal */
     .outer-modal {
-        @apply fixed inset-0 z-50 flex justify-center items-center bg-slate-900/40 backdrop-blur-sm px-4
+        @apply fixed z-50 inset-0 flex justify-center items-center bg-slate-900/40 backdrop-blur-sm px-4
     }
 
     .inner-modal {
-        @apply relative w-full max-w-lg rounded-2xl border border-blue-100/60 bg-gradient-to-br from-blue-50 via-white to-blue-50 p-8
+        @apply relative w-full max-w-lg rounded-2xl border border-blue-100/60 bg-gradient-to-br from-blue-50 via-white to-blue-50 p-4
     }
 
     .cancel-icon {
@@ -124,6 +128,25 @@
     .italic-text {
         @apply text-sm text-slate-500 italic
     }
+}
+
+.add-expense-modal-shell {
+    height: calc(100vh - 110px);
+    height: calc(100dvh - 110px);
+    max-height: calc(100vh - 110px);
+    max-height: calc(100dvh - 110px);
+}
+
+.add-expense-modal-content {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+}
+
+.add-expense-modal-form {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .slow-loading {
@@ -136,4 +159,151 @@
 
 .splitbill-logo {
     font-family: "DM Serif Display", serif;
+}
+
+.dark-theme {
+    --dark-bg: #071426;
+    --dark-surface: #0d2038;
+    --dark-raised: #112943;
+    --dark-text: #e6f3ff;
+    --dark-muted: #9bb4ca;
+    --dark-border: #8ecbff;
+    --neon-blue: #54c8ff;
+    min-height: 100vh;
+    color: var(--dark-text);
+    background: var(--dark-bg);
+    color-scheme: dark;
+}
+
+.dark-theme [class*="from-"]:not([class~="bg-clip-text"]):not(.balance-header) {
+    background-image: none !important;
+    background-color: var(--dark-surface) !important;
+}
+
+.dark-theme [class~="bg-white"],
+.dark-theme [class~="bg-white/90"],
+.dark-theme [class~="bg-white/95"],
+.dark-theme [class~="bg-slate-50"],
+.dark-theme [class~="bg-slate-50/70"],
+.dark-theme [class~="bg-sky-50"],
+.dark-theme [class~="bg-sky-50/60"],
+.dark-theme [class~="bg-blue-50"],
+.dark-theme [class~="bg-indigo-50"] {
+    background-color: var(--dark-surface) !important;
+}
+
+.dark-theme [class~="text-slate-900"],
+.dark-theme [class~="text-slate-800"],
+.dark-theme [class~="text-slate-700"],
+.dark-theme [class~="text-slate-600"],
+.dark-theme [class~="text-slate-500"],
+.dark-theme [class~="text-slate-400"] {
+    color: var(--dark-text) !important;
+}
+
+.dark-theme [class~="border-white"],
+.dark-theme [class~="border-blue-100"],
+.dark-theme [class~="border-blue-100/60"],
+.dark-theme [class~="border-sky-100"],
+.dark-theme [class~="border-slate-100"],
+.dark-theme [class~="border-slate-200"],
+.dark-theme [class~="divide-slate-100"]> :not([hidden])~ :not([hidden]) {
+    border-color: rgb(142 203 255 / 42%) !important;
+}
+
+.dark-theme [class~="shadow-blue-50"],
+.dark-theme [class~="shadow-blue-100"],
+.dark-theme [class~="shadow-blue-100/80"],
+.dark-theme [class~="shadow-sky-100"],
+.dark-theme [class~="shadow-sky-100/80"],
+.dark-theme [class~="shadow-slate-200"] {
+    --tw-shadow-color: rgb(142 203 255 / 20%) !important;
+}
+
+.dark-theme .form-input,
+.dark-theme input:not([type="file"]),
+.dark-theme select,
+.dark-theme textarea {
+    color: var(--dark-text) !important;
+    background-color: #08192d !important;
+    border-color: rgb(142 203 255 / 48%) !important;
+}
+
+.dark-theme .form-input::placeholder,
+.dark-theme input::placeholder,
+.dark-theme textarea::placeholder,
+.dark-theme .form-lbl {
+    color: var(--dark-muted) !important;
+}
+
+.dark-theme .btn,
+.dark-theme [class~="bg-sky-600"],
+.dark-theme [class~="bg-blue-600"] {
+    background-color: #087eb9 !important;
+    color: white !important;
+}
+
+.dark-theme .glittery-shadow,
+.dark-theme .edit-text,
+.dark-theme .group:hover .group-hover\:glittery-shadow {
+    background-image: linear-gradient(90deg, #63d4ff, #42aaff, #8be5ff) !important;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
+}
+
+.dark-theme .accept-text {
+    background-image: linear-gradient(90deg, #7be3b9, #70e3b9, #a7f3d0) !important;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
+}
+
+.dark-theme .reject-text {
+    background-image: linear-gradient(90deg, #fda4af, #fb7185, #fecdd3) !important;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
+}
+
+.dark-theme .edit-btn-shadow:hover,
+.dark-theme .accept-btn-shadow:hover,
+.dark-theme .reject-btn-shadow:hover,
+.dark-theme .invitation-btn:hover {
+    filter: brightness(1.12);
+    box-shadow: 0 0 0 1px rgb(142 203 255 / 35%), 0 8px 22px rgb(51 174 255 / 16%);
+}
+
+.dark-theme .sidebar-active-title {
+    background-image: linear-gradient(135deg, #102c4b, #153b60, #102c4b) !important;
+}
+
+.dark-theme .balance-header {
+    background-image: linear-gradient(to bottom, #0b1220, #0c1833 52%, #1a2547) !important;
+    background-color: #111827 !important;
+    box-shadow: 20px white;
+}
+
+.dark-theme .splitbill-wordmark {
+    background-image: linear-gradient(90deg, #7bdcff, #4eaaff, #a2f0ff) !important;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
+}
+
+.dark-theme .theme-setting {
+    background-color: var(--dark-surface) !important;
+}
+
+.dark-theme table,
+.dark-theme [role="dialog"] {
+    color: var(--dark-text);
+}
+
+.dark-theme hr {
+    border-color: rgb(142 203 255 / 35%);
 }
