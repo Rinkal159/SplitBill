@@ -15,8 +15,8 @@ class UserCreate(Base):
     email: EmailStr
     password: Annotated[str, Field(min_length=8)]
     mobile_number: Annotated[
-        str, Field(min_length=10, max_length=10, pattern=r"^\d{10}$")
-    ]
+        str | None, Field(min_length=10, max_length=10, pattern=r"^\d{10}$")
+    ] = None
 
     @classmethod
     def as_form(
@@ -24,11 +24,14 @@ class UserCreate(Base):
         name: str = Form(...),
         email: str = Form(...),
         password: str = Form(...),
-        mobile_number: str = Form(...),
+        mobile_number: str | None = Form(None),
     ):
         try:
             return cls(
-                name=name, email=email, password=password, mobile_number=mobile_number
+                name=name,
+                email=email,
+                password=password,
+                mobile_number=mobile_number or None,
             )
         except ValidationError as e:
             raise RequestValidationError(e.errors())
@@ -39,6 +42,7 @@ class UserResponse(Base):
     id: int
     name: str
     email: EmailStr
+    mobile_number: str | None = None
     profile_picture_path: str
     created_at: datetime
     updated_at: datetime
@@ -48,6 +52,13 @@ class UserResponse(Base):
 class UserLogin(Base):
     email: EmailStr
     password: str
+
+
+class GoogleSignIn(BaseModel):
+    credential: Annotated[str, Field(min_length=20)]
+    mobile_number: Annotated[
+        str | None, Field(min_length=10, max_length=10, pattern=r"^\d{10}$")
+    ] = None
 
 
 # * ForgotPassword

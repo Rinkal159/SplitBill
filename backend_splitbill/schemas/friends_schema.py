@@ -41,7 +41,7 @@ class UserDetail(Base):
     id: int
     name: str
     email: str
-    mobile_number: str
+    mobile_number: str | None
     profile_picture_path: str
 
 
