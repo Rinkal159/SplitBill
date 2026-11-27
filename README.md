@@ -9,7 +9,7 @@ A full-stack expense-sharing app for tracking shared costs, managing friend and 
 
 ## Demo
 
-[https://github.com/user-attachments/assets/REPLACE-WITH-YOUR-UPLOADED-VIDEO-ID](https://github.com/user-attachments/assets/bf97b090-2e62-49bd-ad83-3fe017b4c569)
+[https://github.com/user-attachments/assets/REPLACE-WITH-YOUR-UPLOADED-VIDEO-ID](https://githuKb.com/user-attachments/assets/bf97b090-2e62-49bd-ad83-3fe017b4c569)
 
 > If the video doesn't load, you can [download or watch it directly](docs/splitbill-demo.mp4).
 
@@ -67,6 +67,8 @@ CLOUDINARY_API_SECRET=your_api_secret
 TOKEN_SECRET_KEY=replace_with_a_long_random_secret
 TOKEN_ALGORITHM=HS256
 MAIL_PASSWORD=your_smtp_app_password
+GOOGLE_CLIENT_ID=your_google_web_client_id.apps.googleusercontent.com
+AUTH_COOKIE_SECURE=false
 ```
 
 > **Keep this file private.** Never commit `.env` to version control.
@@ -122,6 +124,9 @@ Open the URL shown in the terminal (by default <http://localhost:5173>).
 | --- | --- | --- |
 | `VITE_BACKEND_ORIGIN` | Frontend (Vite) | Backend address the dev server proxies `/api` requests to (default `http://localhost:8000`) |
 | `VITE_API_BASE_URL` | Frontend (Vite) | Overrides the frontend API base URL |
+| `VITE_GOOGLE_CLIENT_ID` | Frontend (Vite) | Google OAuth web client ID used by the Google signup button |
+| `GOOGLE_CLIENT_ID` | Backend | Same Google OAuth web client ID; checks the audience of Google ID tokens |
+| `AUTH_COOKIE_SECURE` | Backend | Set to `true` in production to send the session cookie only over HTTPS |
 
 ## Notes
 
