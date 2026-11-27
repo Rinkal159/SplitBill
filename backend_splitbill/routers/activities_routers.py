@@ -11,7 +11,6 @@ from sqlalchemy import (
     String,
     case,
     and_,
-    func,
     Integer,
     Numeric,
 )
@@ -536,19 +535,17 @@ async def get_activities_api(
     if action is not None:
         activity_query = activity_query.where(activities.c.action == action)
 
-    # Get total count
-    total_query = select(func.count()).select_from(activity_query.subquery())
-    result = await db.execute(total_query)
-    total_activities = result.scalar_one()
-
-    # Get paginated results
+    # Fetch one extra row to determine whether another page exists. Counting
+    # the full union of every activity table made the first page needlessly slow.
     skip = limit * (page - 1)
     result = await db.execute(
         activity_query.order_by(activities.c.performed_at.desc())
         .offset(skip)
-        .limit(limit)
+        .limit(limit + 1)
     )
     rows = result.mappings().all()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
 
     # Build activities with proper summaries
     activities_result = []
@@ -575,5 +572,5 @@ async def get_activities_api(
         page=page,
         skip=skip,
         limit=limit,
-        has_more=skip + len(activities_result) < total_activities,
+        has_more=has_more,
     )

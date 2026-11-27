@@ -44,30 +44,70 @@ from backend_splitbill.schemas.pagination_schema import PaginatedResponse
 settlements_router = APIRouter(prefix="/api/settlements", tags=["Settlements"])
 
 
-@settlements_router.get("/requests/sent/page", response_model=PaginatedResponse[SettlementRequestResponseSchema])
+@settlements_router.get(
+    "/requests/sent/page",
+    response_model=PaginatedResponse[SettlementRequestResponseSchema],
+)
 async def get_sent_settlement_requests_page(
     page: Annotated[int, Query(ge=1)] = 1,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
-    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    where = (Settlement.from_user == current_user.id, Settlement.status == SettlementStatus.PENDING)
-    total = (await db.execute(select(func.count(Settlement.id)).where(*where))).scalar_one()
-    result = await db.execute(_settlement_query().where(*where).order_by(Settlement.created_at.desc(), Settlement.id.desc()).offset((page - 1) * limit).limit(limit))
+    where = (
+        Settlement.from_user == current_user.id,
+        Settlement.status == SettlementStatus.PENDING,
+    )
+    total = (
+        await db.execute(select(func.count(Settlement.id)).where(*where))
+    ).scalar_one()
+    result = await db.execute(
+        _settlement_query()
+        .where(*where)
+        .order_by(Settlement.created_at.desc(), Settlement.id.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    )
     items = result.scalars().all()
-    return {"items": items, "page": page, "limit": limit, "has_more": page * limit < total}
+    return {
+        "items": items,
+        "page": page,
+        "limit": limit,
+        "has_more": page * limit < total,
+    }
 
 
-@settlements_router.get("/requests/received/page", response_model=PaginatedResponse[SettlementRequestResponseSchema])
+@settlements_router.get(
+    "/requests/received/page",
+    response_model=PaginatedResponse[SettlementRequestResponseSchema],
+)
 async def get_received_settlement_requests_page(
     page: Annotated[int, Query(ge=1)] = 1,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
-    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    where = (Settlement.to_user == current_user.id, Settlement.status == SettlementStatus.PENDING)
-    total = (await db.execute(select(func.count(Settlement.id)).where(*where))).scalar_one()
-    result = await db.execute(_settlement_query().where(*where).order_by(Settlement.created_at.desc(), Settlement.id.desc()).offset((page - 1) * limit).limit(limit))
+    where = (
+        Settlement.to_user == current_user.id,
+        Settlement.status == SettlementStatus.PENDING,
+    )
+    total = (
+        await db.execute(select(func.count(Settlement.id)).where(*where))
+    ).scalar_one()
+    result = await db.execute(
+        _settlement_query()
+        .where(*where)
+        .order_by(Settlement.created_at.desc(), Settlement.id.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    )
     items = result.scalars().all()
-    return {"items": items, "page": page, "limit": limit, "has_more": page * limit < total}
+    return {
+        "items": items,
+        "page": page,
+        "limit": limit,
+        "has_more": page * limit < total,
+    }
 
 
 @settlements_router.post(
@@ -494,9 +534,7 @@ async def get_expense_settlement_participant(
             detail="You cannot settle with yourself",
         )
 
-    debt_amount = await _pairwise_debt(
-        splits, current_user.id, participant_id, db
-    )
+    debt_amount = await _pairwise_debt(splits, current_user.id, participant_id, db)
     if debt_amount <= 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

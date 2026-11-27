@@ -49,38 +49,82 @@ from backend_splitbill.schemas.pagination_schema import PaginatedResponse
 group_router = APIRouter(prefix="/api/groups", tags=["Groups"])
 
 
-@group_router.get("/invitations/received/page", response_model=PaginatedResponse[ReceivedInvitationResponseSchema])
+@group_router.get(
+    "/invitations/received/page",
+    response_model=PaginatedResponse[ReceivedInvitationResponseSchema],
+)
 async def get_received_group_invitations_page(
     page: Annotated[int, Query(ge=1)] = 1,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
-    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    base = select(GroupInvitation).join(Group).where(
-        GroupInvitation.invitee_id == current_user.id,
-        GroupInvitation.status == InvitationStatus.PENDING,
-        Group.is_deleted.is_(False),
+    base = (
+        select(GroupInvitation)
+        .join(Group)
+        .where(
+            GroupInvitation.invitee_id == current_user.id,
+            GroupInvitation.status == InvitationStatus.PENDING,
+            Group.is_deleted.is_(False),
+        )
     )
-    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
-    result = await db.execute(base.options(selectinload(GroupInvitation.group), selectinload(GroupInvitation.inviter)).order_by(GroupInvitation.updated_at.desc(), GroupInvitation.id.desc()).offset((page - 1) * limit).limit(limit))
+    total = (
+        await db.execute(select(func.count()).select_from(base.subquery()))
+    ).scalar_one()
+    result = await db.execute(
+        base.options(
+            selectinload(GroupInvitation.group), selectinload(GroupInvitation.inviter)
+        )
+        .order_by(GroupInvitation.updated_at.desc(), GroupInvitation.id.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    )
     items = result.scalars().all()
-    return {"items": items, "page": page, "limit": limit, "has_more": page * limit < total}
+    return {
+        "items": items,
+        "page": page,
+        "limit": limit,
+        "has_more": page * limit < total,
+    }
 
 
-@group_router.get("/invitations/sent/page", response_model=PaginatedResponse[SentInvitationResposeSchema])
+@group_router.get(
+    "/invitations/sent/page",
+    response_model=PaginatedResponse[SentInvitationResposeSchema],
+)
 async def get_sent_group_invitations_page(
     page: Annotated[int, Query(ge=1)] = 1,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
-    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    base = select(GroupInvitation).join(Group).where(
-        GroupInvitation.inviter_id == current_user.id,
-        GroupInvitation.status == InvitationStatus.PENDING,
-        Group.is_deleted.is_(False),
+    base = (
+        select(GroupInvitation)
+        .join(Group)
+        .where(
+            GroupInvitation.inviter_id == current_user.id,
+            GroupInvitation.status == InvitationStatus.PENDING,
+            Group.is_deleted.is_(False),
+        )
     )
-    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
-    result = await db.execute(base.options(selectinload(GroupInvitation.group), selectinload(GroupInvitation.invitee)).order_by(GroupInvitation.updated_at.desc(), GroupInvitation.id.desc()).offset((page - 1) * limit).limit(limit))
+    total = (
+        await db.execute(select(func.count()).select_from(base.subquery()))
+    ).scalar_one()
+    result = await db.execute(
+        base.options(
+            selectinload(GroupInvitation.group), selectinload(GroupInvitation.invitee)
+        )
+        .order_by(GroupInvitation.updated_at.desc(), GroupInvitation.id.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    )
     items = result.scalars().all()
-    return {"items": items, "page": page, "limit": limit, "has_more": page * limit < total}
+    return {
+        "items": items,
+        "page": page,
+        "limit": limit,
+        "has_more": page * limit < total,
+    }
 
 
 # * create a group
@@ -1236,6 +1280,4 @@ async def admin_transfered_api(
         await db.rollback()
         raise
 
-    return {
-        "message": f"Promoted to admin successfully!"
-    }
+    return {"message": f"Promoted to admin successfully!"}
