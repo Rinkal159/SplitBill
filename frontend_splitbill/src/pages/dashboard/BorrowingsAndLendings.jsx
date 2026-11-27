@@ -4,17 +4,21 @@ function BorrowingsAndLendings({ dashboardData, onUserClick }) {
   return (
     <div>
       {/* balances */}
-      <div className="bg-gradient-to-b from-blue-600 to-sky-300 p-5 text-white shadow-lg rounded-tl-2xl rounded-tr-2xl">
+      <div className="balance-header bg-gradient-to-b from-blue-600 to-sky-300 p-5 text-white shadow-lg rounded-tl-2xl rounded-tr-2xl">
         <div className="flex items-end justify-around mt-2">
           <div className="flex flex-col items-center">
-            <p className="text-sm text-blue-100 text-center font-semibold">You borrowed</p>
+            <p className="text-sm text-blue-100 text-center font-semibold">
+              You borrowed
+            </p>
             <span className="text-xl font-semibold">
               - ₹{formatAmount(dashboardData.total_borrowings)}
             </span>
           </div>
 
           <div className="flex flex-col items-center">
-            <p className="text-sm text-blue-100 font-medium text-center">Total balance</p>
+            <p className="text-sm text-blue-100 font-medium text-center">
+              Total balance
+            </p>
             <h2 className="text-3xl font-bold">
               {dashboardData.total_balance > 0 ? "+" : "-"}&nbsp;₹
               {formatAmount(Math.abs(dashboardData.total_balance))}
@@ -22,7 +26,9 @@ function BorrowingsAndLendings({ dashboardData, onUserClick }) {
           </div>
 
           <div className="flex flex-col items-center">
-            <p className="text-sm text-blue-100 text-center font-semibold">You lent</p>
+            <p className="text-sm text-blue-100 text-center font-semibold">
+              You lent
+            </p>
             <span className="text-xl font-semibold">
               + ₹{formatAmount(dashboardData.total_lendings)}
             </span>
@@ -42,7 +48,7 @@ function BorrowingsAndLendings({ dashboardData, onUserClick }) {
               <ul className="w-full">
                 {dashboardData.borrowings.map((borrow) => (
                   <li
-                  onClick={() => onUserClick(borrow.borrowed_from)}
+                    onClick={() => onUserClick(borrow.borrowed_from)}
                     className="group mb-2 flex items-center justify-between gap-2 px-6 py-3 trans hover:-translate-y-0.5 hover:border-red-100 hover:cursor-pointer hover:shadow-md"
                     key={borrow.borrowed_from.id}
                   >
@@ -82,7 +88,7 @@ function BorrowingsAndLendings({ dashboardData, onUserClick }) {
               <ul className="w-full">
                 {dashboardData.lendings.map((lend) => (
                   <li
-                  onClick={() => onUserClick(lend.lent_to)}
+                    onClick={() => onUserClick(lend.lent_to)}
                     className="group mb-2 flex items-center justify-between gap-2 px-6 py-3 trans hover:-translate-y-0.5 hover:border-red-100 hover:cursor-pointer hover:shadow-md "
                     key={lend.lent_to.id}
                   >
