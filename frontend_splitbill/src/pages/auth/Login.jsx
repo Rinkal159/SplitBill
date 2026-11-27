@@ -1,55 +1,120 @@
-import React, { use, useContext, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import Error from "../error/Error";
-import { Link } from "react-router-dom";
 import Navbar from "../../layout/Navbar";
 import api from "../../api/axios";
 import LabelAndInput from "./LabelAndInput";
 import RedirectLinks from "./RedirectLinks";
 import { AuthContext } from "../../context/AuthProvider";
-import getBackendError from "../../utils/getBackendError"
+import getBackendError from "../../utils/getBackendError";
+import loadGoogleIdentityServices from "../../utils/loadGoogleIdentityServices";
+import Loading from "../loading/Loading";
 
 function Login() {
   const { setUser } = useContext(AuthContext);
-  const [person, setPerson] = new useState({
-    email: "rinkal@gmail.com",
-    password: "Rinkal@1234",
-  });
-
-  // loading
-  const [loading, setLoading] = new useState(false);
-
-  // error
-  const [backErrors, setBackErrors] = new useState({});
-
+  const [person, setPerson] = useState({ email: "", password: "" });
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [backErrors, setBackErrors] = useState({});
+  const googleButtonRef = useRef(null);
   const navigate = useNavigate();
 
   const handleChange = (e, field) => {
     setBackErrors({});
-
-    setPerson((prevPerson) => ({
-      ...prevPerson,
-      [field]: e.target.value,
-    }));
+    setPerson((previous) => ({ ...previous, [field]: e.target.value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setBackErrors({});
 
     try {
-      const response = await api.post("/auth/login", person);
-
-      // upading user in AuthContext, because AuthContext runs once only when app mounts and at that time user was not logged in.
-      const user = await api.get("/auth/me");
-      setUser(user.data);
-
-      return navigate("/dashboard");
+      await api.post("/auth/login", person);
+      const { data: user } = await api.get("/auth/me");
+      setUser(user);
+      navigate("/dashboard", { replace: true });
     } catch (error) {
-      setLoading(false);
       setBackErrors(getBackendError(error));
+    } finally {
+      setLoading(false);
     }
   };
+
+  const handleGoogleLogin = useCallback(async (response) => {
+    if (!response?.credential) {
+      setBackErrors({
+        type: "501",
+        error: "Google did not return a sign in credential. Please try again.",
+      });
+      return;
+    }
+
+    setBackErrors({});
+    setGoogleLoading(true);
+    try {
+      const res = await api.post(
+        "/auth/google",
+        { credential: response.credential },
+        { headers: { "X-Requested-With": "XMLHttpRequest" } },
+      );
+      const { data: user } = await api.get("/auth/me");
+      setUser(user);
+
+      return res.data.is_new_user
+        ? navigate("/create", { replace: true })
+        : navigate("/dashboard", { replace: true });
+    } catch (error) {
+      setBackErrors(getBackendError(error));
+    } finally {
+      setGoogleLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+    if (!clientId) {
+      setBackErrors({
+        type: "501",
+        error: "Google sign in is not configured for this environment.",
+      });
+      return undefined;
+    }
+
+    loadGoogleIdentityServices()
+      .then((googleIdentity) => {
+        if (cancelled || !googleButtonRef.current) return;
+
+        googleButtonRef.current.replaceChildren();
+        googleIdentity.initialize({
+          client_id: clientId,
+          callback: handleGoogleLogin,
+          use_fedcm_for_button: true,
+        });
+        googleIdentity.renderButton(googleButtonRef.current, {
+          type: "standard",
+          theme: "outline",
+          size: "large",
+          text: "signin_with",
+          shape: "rectangular",
+          logo_alignment: "left",
+          width: Math.max(
+            200,
+            Math.min(googleButtonRef.current.clientWidth || 400, 400),
+          ),
+        });
+      })
+      .catch((error) => {
+        if (!cancelled) setBackErrors(getBackendError(error));
+      });
+
+    return () => {
+      cancelled = true;
+      googleButtonRef.current?.replaceChildren();
+    };
+  }, [handleGoogleLogin]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -57,80 +122,91 @@ function Login() {
       <hr />
 
       <div className="flex justify-center">
-        {/* Left Column — Login Form */}
-        <div className="w-full sm:w-1/2 lg:w-1/3 max-w-lg m-8 flex justify-center lg:px-0 px-6 py-10 lg:py-16 border border-blue-100/60 shadow-xl shadow-blue-100/80 bg-gradient-to-br from-blue-50/60 via-white to-blue-50/60">
+        <div className="m-8 flex w-full max-w-xl justify-center border border-blue-100/60 bg-gradient-to-br from-blue-50/60 via-white to-blue-50/60 px-6 py-12 shadow-xl shadow-blue-100/80 sm:w-1/2 lg:w-1/2">
           <div>
-            <div className="mb-8 place-self-center text-center">
-              <h2 className="text-2xl font-normal text-slate-800 tracking-tight">
-                Log into your
-                {/* <br /> */}
+            <div className="mb-8 text-center">
+              <h2 className="text-xl font-normal tracking-tight text-slate-800 sm:text-2xl">
+                Log into your{" "}
                 <span className="glittery-shadow p-2">SplitBill account</span>
               </h2>
-              <p className="mt-2 text-sm text-slate-400 max-w-xs ">
+              <p className="mt-2 text-sm text-slate-400">
                 Pick up where you left off.
               </p>
             </div>
 
-            <form
-              className="w-full max-w-xs space-y-5 "
-              onSubmit={handleSubmit}
-            >
+            <form className="w-full max-w-md space-y-3" onSubmit={handleSubmit}>
               {Object.keys(backErrors).length !== 0 && (
                 <Error errors={backErrors.error} type={backErrors.type} />
               )}
 
-              {/* Email */}
               <LabelAndInput
-                field={"email"}
-                labelValue={"Email"}
-                type={"email"}
+                field="email"
+                labelValue="Email"
+                type="email"
                 person={person}
-                placeholder={"Your email"}
+                placeholder="Your email"
                 handleEvent={(e) => handleChange(e, "email")}
                 showError={false}
-                required={true}
+                required
+                compact
               />
 
-              {/* Password */}
               <LabelAndInput
-                field={"password"}
-                labelValue={"Password"}
-                type={"password"}
+                field="password"
+                labelValue="Password"
+                type="password"
                 person={person}
-                placeholder={"Yourpassword"}
+                placeholder="Your password"
                 handleEvent={(e) => handleChange(e, "password")}
                 showError={false}
-                required={true}
+                required
+                compact
               />
 
               <Link
-                className="text-sky-600 text-md block !my-2"
-                to={"/forgot-password"}
+                className="my-2 block text-md text-sky-600"
+                to="/forgot-password"
               >
                 Forgot password?
               </Link>
 
-              {/* Submit Button */}
               <button
-                disabled={!person.email || !person.password || loading}
+                disabled={
+                  !person.email || !person.password || loading || googleLoading
+                }
                 className="btn"
                 type="submit"
               >
-                {loading ? "Login..." : "Login"}
+                {loading ? "Logging in..." : "Log in"}
               </button>
 
-              {/* <Link className="text-sky-600 text-md block !my-4 py-3 mt-2 border-2 rounded-xl border-blue-100 text-center" to={"/forgot-password"}>Forgot password?</Link> */}
+              <div className="flex items-center gap-3 py-1 text-xs uppercase tracking-wider text-slate-400">
+                <span className="h-px flex-1 bg-slate-200" />
+                or
+                <span className="h-px flex-1 bg-slate-200" />
+              </div>
 
-              {/* Signup link */}
+              <div
+                ref={googleButtonRef}
+                className="flex min-h-11 w-full justify-center"
+                aria-label="Sign in with Google"
+              />
+
               <RedirectLinks
-                message={"Don't have an account?"}
-                path={"/signup"}
-                value={"Signup"}
+                message="Don't have an account?"
+                path="/signup"
+                value="Sign up"
               />
             </form>
           </div>
         </div>
       </div>
+
+      {googleLoading && (
+        <div className="outer-modal">
+          <Loading custom msg="Signing in with Google" />
+        </div>
+      )}
     </div>
   );
 }

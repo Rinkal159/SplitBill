@@ -1,34 +1,40 @@
-import { useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/axios";
-import axios from "axios";
 import Error from "../error/Error";
 import Navbar from "../../layout/Navbar";
 import LabelAndInput from "./LabelAndInput";
 import RedirectLinks from "./RedirectLinks";
-import getBackendError from "../../utils/getBackendError"
+import getBackendError from "../../utils/getBackendError";
+import loadGoogleIdentityServices from "../../utils/loadGoogleIdentityServices";
+import { AuthContext } from "../../context/AuthProvider";
+import Loading from "../loading/Loading";
+import ProfilePictureInput from "./ProfilePictureInput";
 
 export default function Signup() {
-  const [person, setPerson] = new useState({
+  const [person, setPerson] = useState({
     name: "",
     email: "",
     mobileNumber: "",
     password: "",
   });
-  const [imagePreview, setImagePreview] = new useState("../../../default.png");
+  const [imagePreview, setImagePreview] = useState("/default_profile_picture.png");
 
   // loading
-  const [loading, setLoading] = new useState(false);
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   // errors
-  const [frontErrors, setFrontErrors] = new useState({
+  const [frontErrors, setFrontErrors] = useState({
     email: "",
     mobileNumber: "",
     password: "",
   });
-  const [backErrors, setBackErrors] = new useState({});
+  const [backErrors, setBackErrors] = useState({});
+  const googleButtonRef = useRef(null);
 
   const navigate = useNavigate();
+  const { setUser } = useContext(AuthContext);
 
   const handlePersonChange = (e, field) => {
     setBackErrors({});
@@ -65,23 +71,11 @@ export default function Signup() {
     setBackErrors({});
     handlePersonChange(e, "mobileNumber");
 
-    const mobileNumberRegex = /^\d+$/;
     const value = e.target.value;
-
     if (!value) {
       handleErrorsChange("mobileNumber", "");
-    } else if (!mobileNumberRegex.test(value)) {
-      handleErrorsChange(
-        "mobileNumber",
-        "Only digits are allowed in mobile number",
-      );
-    } else if (value.length < 10) {
+    } else if (!/^\d{10}$/.test(value)) {
       handleErrorsChange("mobileNumber", "Mobile number must be 10 digits");
-    } else if (value.length > 10) {
-      handleErrorsChange(
-        "mobileNumber",
-        "Mobile number cannot exceed 10 digits",
-      );
     } else {
       handleErrorsChange("mobileNumber", "");
     }
@@ -133,18 +127,14 @@ export default function Signup() {
         formData.append("profilePicture", person.profilePicture);
       formData.append("name", person.name);
       formData.append("email", person.email);
-      formData.append("mobile_number", person.mobileNumber);
+      if (person.mobileNumber) {
+        formData.append("mobile_number", person.mobileNumber);
+      }
       formData.append("password", person.password);
 
-      const response = await axios.post(
-        "http://localhost:8000/api/auth/signup",
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        },
-      );
+      await api.post("/auth/signup", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
       return navigate("/login");
     } catch (error) {
@@ -153,82 +143,123 @@ export default function Signup() {
     }
   };
 
+  const handleGoogleSignup = useCallback(
+    async (response) => {
+      if (!response?.credential) {
+        setBackErrors({
+          type: "501",
+          error:
+            "Google did not return a sign in credential. Please try again.",
+        });
+        return;
+      }
+
+      setBackErrors("");
+      setGoogleLoading(true);
+
+      try {
+        const res = await api.post(
+          "/auth/google",
+          { credential: response.credential },
+          { headers: { "X-Requested-With": "XMLHttpRequest" } },
+        );
+
+        const { data: user } = await api.get("/auth/me");
+        setUser(user);
+
+        return res.data.is_new_user
+          ? navigate("/create", { replace: true })
+          : navigate("/dashboard", { replace: true });
+      } catch (error) {
+        setBackErrors(getBackendError(error));
+      } finally {
+        setGoogleLoading(false);
+      }
+    },
+    [navigate, setUser],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+    if (!clientId) {
+      setBackErrors({
+        type: "501",
+        error: "Google sign up is not configured for this environment.",
+      });
+      return undefined;
+    }
+
+    loadGoogleIdentityServices()
+      .then((googleIdentity) => {
+        if (cancelled || !googleButtonRef.current) return;
+
+        googleButtonRef.current.replaceChildren();
+        googleIdentity.initialize({
+          client_id: clientId,
+          callback: handleGoogleSignup,
+          use_fedcm_for_button: true,
+        });
+        googleIdentity.renderButton(googleButtonRef.current, {
+          type: "standard",
+          theme: "outline",
+          size: "large",
+          text: "signup_with",
+          shape: "rectangular",
+          logo_alignment: "left",
+          width: Math.max(
+            200,
+            Math.min(googleButtonRef.current.clientWidth || 400, 400),
+          ),
+        });
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setBackErrors(getBackendError(error));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      googleButtonRef.current?.replaceChildren();
+    };
+  }, [handleGoogleSignup]);
+
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
       <hr />
 
       <div className="flex justify-center">
-        {/* Left Column — Signup Form */}
-        <div className="w-1/2 m-8 flex items-start justify-center lg:px-0 px-6 py-10 lg:py-16 bg-white border border-blue-100/60 shadow-xl shadow-blue-100/90 bg-gradient-to-br from-blue-50/60 via-white to-blue-50/60">
-          <div className="w-full max-w-md">
-            <div className="mb-8 place-self-center text-center">
-              <h2 className="text-2xl font-normal text-slate-800 tracking-tight">
+        <div className="flex justify-center w-full sm:w-1/2 lg:w-1/2 max-w-xl m-8 px-6 py-12  border border-blue-100/60 shadow-xl shadow-blue-100/80 bg-gradient-to-br from-blue-50/60 via-white to-blue-50/60">
+          <div>
+            <div className="mb-6 text-center">
+              <h2 className="text-xl font-normal tracking-tight text-slate-800 sm:text-2xl">
                 Create your
                 {/* <br /> */}
                 <span className="glittery-shadow p-2">SplitBill account</span>
               </h2>
-              <p className="mt-2 text-sm text-slate-400 max-w-xs ">
+              <p className="mt-2 text-sm text-slate-400">
                 Start splitting expenses with friends.
               </p>
             </div>
 
-            <form className="space-y-5 " onSubmit={handleFormSubmit}>
+            <form
+              className="w-full max-w-md space-y-3"
+              onSubmit={handleFormSubmit}
+            >
               {Object.keys(backErrors).length !== 0 && (
                 <Error errors={backErrors.error} type={backErrors.type} />
               )}
 
               {/* Profile picture */}
-              <div className="flex items-center gap-4 pb-1">
-                <div className="relative">
-                  <div className="w-20 h-20 rounded-full overflow-hidden border border-slate-200/80 bg-slate-50 flex items-center justify-center">
-                    <img
-                      src={imagePreview}
-                      alt="Profile"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <label
-                    htmlFor="profilePicture"
-                    className="absolute -bottom-0.5 -right-0.5 bg-white border border-slate-200 rounded-full p-1.5 cursor-pointer hover:bg-slate-50 transition-colors shadow-sm"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-3.5 w-3.5 text-slate-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
-                  </label>
-                  <input
-                    type="file"
-                    id="profilePicture"
-                    accept="image/*"
-                    onChange={handleProfilePictureChange}
-                    className="hidden"
-                  />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-slate-700 leading-none">
-                    Profile picture
-                  </p>
-                  <p className="text-xs text-slate-400 mt-0.5">Optional</p>
-                </div>
-              </div>
+              <ProfilePictureInput
+                imagePreview={imagePreview}
+                handleProfilePictureChange={handleProfilePictureChange}
+                big={false}
+              />
 
-              {/* Name */}
               <LabelAndInput
                 field={"name"}
                 labelValue={"Name"}
@@ -237,9 +268,9 @@ export default function Signup() {
                 placeholder={"Your full name"}
                 required={true}
                 handleEvent={(e) => handlePersonChange(e, "name")}
+                compact
               />
 
-              {/* Email */}
               <LabelAndInput
                 field={"email"}
                 labelValue={"Email"}
@@ -250,22 +281,21 @@ export default function Signup() {
                 showError={true}
                 required={true}
                 errors={frontErrors}
+                compact
               />
 
-              {/* Mobile Number */}
               <LabelAndInput
                 field={"mobileNumber"}
-                labelValue={"Mobile number"}
+                labelValue={"Mobile number (optional)"}
                 type={"text"}
                 person={person}
-                placeholder={"i.e. 9876543210"}
+                placeholder={"i.e. 987654XXXX"}
                 handleEvent={handleMobileNumberChange}
                 showError={true}
                 errors={frontErrors}
-                required={true}
+                compact
               />
 
-              {/* Password */}
               <LabelAndInput
                 field={"password"}
                 labelValue={"Password"}
@@ -276,6 +306,7 @@ export default function Signup() {
                 showError={true}
                 errors={frontErrors}
                 required={true}
+                compact
               />
 
               {/* Submit Button */}
@@ -283,18 +314,29 @@ export default function Signup() {
                 disabled={
                   !person.name ||
                   !person.email ||
-                  !person.mobileNumber ||
+                  frontErrors.mobileNumber ||
                   !person.password ||
                   frontErrors.email ||
-                  frontErrors.mobileNumber ||
                   frontErrors.password ||
                   loading
                 }
-                className="btn"
+                className="btn !mt-6 !py-2.5"
                 type="submit"
               >
                 {loading ? "Signing up..." : "Create account"}
               </button>
+
+              <div className="flex items-center gap-3 py-1 text-xs uppercase tracking-wider text-slate-400">
+                <span className="h-px flex-1 bg-slate-200" />
+                or
+                <span className="h-px flex-1 bg-slate-200" />
+              </div>
+
+              <div
+                ref={googleButtonRef}
+                className="flex min-h-11 w-full justify-center"
+                aria-label="Sign up with Google"
+              />
 
               {/* Login link */}
               <RedirectLinks
@@ -306,6 +348,12 @@ export default function Signup() {
           </div>
         </div>
       </div>
+
+      {googleLoading && (
+        <div className="outer-modal">
+          <Loading custom msg="Signing up with google" />
+        </div>
+      )}
     </div>
   );
 }
