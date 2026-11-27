@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 import cloudinary
 from backend_splitbill.env_config import settings
 import cloudinary.uploader
@@ -18,6 +20,21 @@ def upload_picture_on_cloudinary(file, folder):
     )
 
     return result["public_id"]
+
+
+def upload_google_picture_on_cloudinary(picture_url: str, folder: str):
+    parsed_url = urlparse(picture_url)
+    hostname = (parsed_url.hostname or "").lower()
+    if (
+        parsed_url.scheme != "https"
+        or not (
+            hostname == "googleusercontent.com"
+            or hostname.endswith(".googleusercontent.com")
+        )
+    ):
+        raise ValueError("Google returned an unsupported profile picture URL")
+
+    return upload_picture_on_cloudinary(picture_url, folder)
 
 
 def delete_picture_from_cloudinary(public_id):
