@@ -20,6 +20,7 @@ async def get_friend_settlement_data(
     current_user=Depends(get_current_user),
     expense_ids=None,
     include_expense_summary=True,
+    settlement_statuses=None,
     page=None,
     limit=None,
 ):
@@ -32,14 +33,22 @@ async def get_friend_settlement_data(
     expense_groups = await get_expense_groups(
         expense_ids=expense_ids["expense_ids"], db=db, newest_first=True
     )
-    all_splits = [split for splits in expense_groups for split in splits]
-    settlement_groups = await get_settlement_groups(all_splits, db)
-    summary_data = (
-        await get_expense_summary_data(expense_groups, db, current_user)
-        if include_expense_summary
-        else {}
+    friend_expense_groups = [
+        splits
+        for splits in expense_groups
+        if friend_id in {split.user_id for split in splits}
+    ]
+    page_offset = (page - 1) * limit if page is not None and limit is not None else 0
+    page_groups = (
+        friend_expense_groups[page_offset : page_offset + limit]
+        if page is not None and limit is not None
+        else friend_expense_groups
     )
-
+    page_expense_ids = {splits[0].expense_id for splits in page_groups if splits}
+    all_splits = [split for splits in expense_groups for split in splits]
+    settlement_groups = await get_settlement_groups(
+        all_splits, db, statuses=settlement_statuses
+    )
     settlements = []
     friend_balances = {}
     total_balance = Decimal("0")
@@ -50,6 +59,7 @@ async def get_friend_settlement_data(
         users_involed = [split.user_id for split in splits]
 
         expense = splits[0].expense
+        include_expense_details = expense.id in page_expense_ids
 
         creditors = {}
         debtors = {}
@@ -118,18 +128,19 @@ async def get_friend_settlement_data(
                 creditor["user"].id == current_user.id
                 and debtor["user"].id == friend_id
             ):
-                your_actual_logs.append(
-                    {
-                        "to_user": UserDetailSchema.model_validate(debtor["user"]),
-                        "amount": transfer,
-                    }
-                )
-                your_logs.append(
-                    {
-                        "to_user": UserDetailSchema.model_validate(adjusted_debtor["user"]), # type: ignore
-                        "amount": balance_transfer,
-                    }
-                )
+                if include_expense_details:
+                    your_actual_logs.append(
+                        {
+                            "to_user": UserDetailSchema.model_validate(debtor["user"]),
+                            "amount": transfer,
+                        }
+                    )
+                    your_logs.append(
+                        {
+                            "to_user": UserDetailSchema.model_validate(adjusted_debtor["user"]), # type: ignore
+                            "amount": balance_transfer,
+                        }
+                    )
                 total_balance += balance_transfer
                 if expense.group_id:
                     group_balance += balance_transfer
@@ -148,18 +159,19 @@ async def get_friend_settlement_data(
                 debtor["user"].id == current_user.id
                 and creditor["user"].id == friend_id
             ):
-                your_actual_logs.append(
-                    {
-                        "to_user": UserDetailSchema.model_validate(creditor["user"]),
-                        "amount": -transfer,
-                    }
-                )
-                your_logs.append(
-                    {
-                        "to_user": UserDetailSchema.model_validate(adjusted_creditor["user"]), # type: ignore
-                        "amount": -balance_transfer,
-                    }
-                )
+                if include_expense_details:
+                    your_actual_logs.append(
+                        {
+                            "to_user": UserDetailSchema.model_validate(creditor["user"]),
+                            "amount": -transfer,
+                        }
+                    )
+                    your_logs.append(
+                        {
+                            "to_user": UserDetailSchema.model_validate(adjusted_creditor["user"]), # type: ignore
+                            "amount": -balance_transfer,
+                        }
+                    )
                 total_balance -= balance_transfer
                 if expense.group_id:
                     group_balance -= balance_transfer
@@ -175,13 +187,14 @@ async def get_friend_settlement_data(
 
             # other settlements
             else:
-                others_actual_logs.append(
-                    {
-                        "from_user": UserDetailSchema.model_validate(debtor["user"]),
-                        "to_user": UserDetailSchema.model_validate(creditor["user"]),
-                        "amount": -transfer,
-                    }
-                )
+                if include_expense_details:
+                    others_actual_logs.append(
+                        {
+                            "from_user": UserDetailSchema.model_validate(debtor["user"]),
+                            "to_user": UserDetailSchema.model_validate(creditor["user"]),
+                            "amount": -transfer,
+                        }
+                    )
 
             creditor["balance"] -= transfer
             debtor["balance"] += transfer
@@ -214,7 +227,6 @@ async def get_friend_settlement_data(
                 "your_actual_settlements": your_actual_logs,
                 "others_actual_settlements": others_actual_logs,
                 "your_expensewise_balance_with_friend": expensewise_balance,
-                **summary_data.get(expense.id, {}),
             }
         )
 
@@ -259,8 +271,25 @@ async def get_friend_settlement_data(
     if page is not None and limit is not None:
         skip = (page - 1) * limit
         settlements = settlements[skip : skip + limit]
+        # The page shows summaries for only these expenses. Loading payment
+        # history for every expense in the relationship was wasted work; the
+        # full set of splits and settlements above is still used for balances.
+        summary_data = (
+            await get_expense_summary_data(page_groups, db, current_user)
+            if include_expense_summary
+            else {}
+        )
+        for item in settlements:
+            item.update(summary_data.get(item["expense"].id, {}))
     else:
         skip = 0
+        summary_data = (
+            await get_expense_summary_data(expense_groups, db, current_user)
+            if include_expense_summary
+            else {}
+        )
+        for item in settlements:
+            item.update(summary_data.get(item["expense"].id, {}))
 
     return {
         "friend": friend.scalars().one_or_none(),
