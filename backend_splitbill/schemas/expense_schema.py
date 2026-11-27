@@ -23,9 +23,9 @@ class ExpenseSplitSchema(Base):
 
 class ExpenseCreate(Base):
     group_id: int | None = None
+    category: Literal["Food", "Shopping", "Travel", "Other"] = "Other"
 
     title: Annotated[str, Field(min_length=1, max_length=100)]
-    description: Annotated[str | None, Field(min_length=10, max_length=1000)] = None
     note: Annotated[str | None, Field(min_length=10, max_length=1000)] = None
 
     total_amount: Annotated[Decimal, Field(gt=0)]
@@ -56,7 +56,7 @@ class ExpenseCreateResponse(Base):
     id: int
     group: GroupDetail | None
     title: str
-    description: str | None
+    category: Literal["Food", "Shopping", "Travel", "Other"] = "Other"
     attachment_url: str | None
     note: str | None
     total_amount: Decimal
@@ -69,7 +69,7 @@ class ExpenseDetail(Base):
     id: int
     group: GroupDetail | None
     title: str
-    description: str | None = None
+    category: Literal["Food", "Shopping", "Travel", "Other"] = "Other"
     note: str | None = None
     total_amount: Decimal
     expense_date: date
@@ -180,3 +180,11 @@ class TotalBalanceWithFriend(Base):
     friend: UserDetail
     total_balance: Decimal
     had_expenses: bool
+
+
+# * TotalExpenseSettlement
+class TotalExpenseSettlement(Base):
+    start_date: date
+    end_date: date
+    
+    
