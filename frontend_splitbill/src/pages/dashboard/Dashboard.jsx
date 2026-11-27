@@ -18,9 +18,11 @@ import Error from "../error/Error";
 import getBackendError from "../../utils/getBackendError";
 import CashSettlementRequests from "../settlement/CashSettlementRequests";
 import SettlementHistory from "../settlement/SettlementHistory";
+import ExpenseReports from "../expense_report/ExpenseReports";
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState({});
+  const [reportRefreshKey, setReportRefreshKey] = useState(0);
   const [activeSidebarTitle, setactiveSidebarTitle] = useState("Dashboard");
   const [contentRenderer, setContentRenderer] = useState("Dashboard");
   const [friends, setFriends] = useState([]);
@@ -73,6 +75,7 @@ function Dashboard() {
         ...data,
         total_balance: data.total_lendings - data.total_borrowings,
       });
+      setReportRefreshKey((key) => key + 1);
 
       setLoading((prevLoading) => ({
         ...prevLoading,
@@ -341,6 +344,7 @@ function Dashboard() {
             sentSettlementRequests={sentSettlementRequests}
             setSentSettlementRequests={setSentSettlementRequests}
             sentSettlementRequestsLoading={loading.sentSettlementRequests}
+            onSettlementChange={() => setReportRefreshKey((key) => key + 1)}
           />
         );
       case "SettlementHistory":
@@ -369,7 +373,7 @@ function Dashboard() {
 
       <div className="flex justify-center w-full mx-auto gap-4 ">
         {/* left sidebar */}
-        <aside className="hidden lg:block w-72 shrink-0 h-screen shadow-xl shadow-blue-100/80 mt-4 rounded-2xl">
+        <aside className="hidden lg:block border border-white w-72 shrink-0 h-screen shadow-xl shadow-blue-100 mt-4 rounded-2xl">
           {sidebarTitles.map((title) => (
             <div
               onClick={() => {
@@ -412,7 +416,7 @@ function Dashboard() {
         </aside>
 
         {/* main box */}
-        <main className="flex flex-col w-full max-w-2xl border border-blue-100/60 shadow-xl shadow-blue-100/80 mt-4 rounded-2xl">
+        <main className="flex flex-col w-full max-w-2xl border border-blue-100/70 bg-white shadow-xl shadow-blue-100 mt-4 rounded-2xl">
           {loading.dashboard && contentRenderer === "Dashboard" ? (
             <Loading msg={"Dashboard"} />
           ) : (
@@ -421,7 +425,13 @@ function Dashboard() {
         </main>
 
         {/* right sidebar */}
-        <aside className="hidden lg:block w-72 shrink-0 h-screen"></aside>
+        <aside className="hidden lg:block w-80 shrink-0 h-screen">
+          <ExpenseReports
+            friend={contentRenderer === "FriendExpenses" ? selectedFriend : null}
+            group={contentRenderer === "GroupExpenses" ? selectedGroup : null}
+            refreshKey={reportRefreshKey}
+          />
+        </aside>
       </div>
 
       {showFriendInviteModal && (
