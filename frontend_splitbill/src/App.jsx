@@ -1,3 +1,4 @@
+import { createContext, useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import "./App.css";
 
@@ -14,35 +15,56 @@ import ProtectedResetPassword from "./pages/auth/ProtectedResetPassword";
 import AddExpense from "./pages/expense/AddExpense";
 import AllExpenses from "./pages/expense/AllExpenses";
 import { ProfilePage, SettingsPage } from "./pages/profile/ProfilePages";
+import CreateProfile from "./pages/auth/CreateProfile";
+
+export const ThemeContext = createContext({
+  darkMode: false,
+  setDarkMode: () => {},
+});
 
 function App() {
-  return (
-    <div>
-      <BrowserRouter>
-        <Routes>
-          {/* non-authenticated */}
-          <Route element={<UnauthenticatedBody />}>
-            <Route path="/" element={<Index />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route element={<ProtectedResetPassword />}>
-              <Route path="/reset-password" element={<ResetPassword />} />
-            </Route>
-          </Route>
+  const [darkMode, setDarkMode] = useState(
+    () => localStorage.getItem("splitbill-theme") === "dark",
+  );
 
-          {/* authenticated */}
-          <Route element={<AuthenticatedBody />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/expenses/add" element={<AddExpense />} />
-            <Route path="/expenses/:expenseId/edit" element={<AddExpense />} />
-            <Route path="/expenses" element={<AllExpenses />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </div>
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkMode ? "dark" : "light";
+    localStorage.setItem("splitbill-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
+
+  return (
+    <ThemeContext.Provider value={{ darkMode, setDarkMode }}>
+      <div className={darkMode ? "dark-theme" : ""}>
+        <BrowserRouter>
+          <Routes>
+            {/* non-authenticated */}
+            <Route element={<UnauthenticatedBody />}>
+              <Route path="/" element={<Index />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route element={<ProtectedResetPassword />}>
+                <Route path="/reset-password" element={<ResetPassword />} />
+              </Route>
+            </Route>
+
+            {/* authenticated */}
+            <Route element={<AuthenticatedBody />}>
+              <Route path="/create" element={<CreateProfile />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/expenses/add" element={<AddExpense />} />
+              <Route
+                path="/expenses/:expenseId/edit"
+                element={<AddExpense />}
+              />
+              <Route path="/expenses" element={<AllExpenses />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </div>
+    </ThemeContext.Provider>
   );
 }
 
