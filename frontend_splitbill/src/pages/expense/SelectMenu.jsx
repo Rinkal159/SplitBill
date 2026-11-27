@@ -16,9 +16,12 @@ export default function SelectMenu({
   autoFocus = false,
   defaultMenuIsOpen = false,
   additionalInfo = "",
-  required = true
+  required = true,
+  menuPortalTarget,
+  isDisabled = false,
 }) {
   const customStyles = {
+    menuPortal: (base) => ({ ...base, zIndex: 100 }),
     control: (base, state) => ({
       ...base,
       minHeight: "44px",
@@ -28,8 +31,9 @@ export default function SelectMenu({
       "&:hover": {
         borderColor: "#60a5fa",
       },
-      backgroundColor: "#ffffff",
-      cursor: "text",
+      backgroundColor: state.isDisabled ? "#f8fafc" : "#ffffff",
+      cursor: state.isDisabled ? "not-allowed" : "text",
+      opacity: state.isDisabled ? 0.7 : 1,
     }),
 
     valueContainer: (base) => ({
@@ -95,18 +99,26 @@ export default function SelectMenu({
       borderRadius: "7px",
       padding: "6px 10px",
       fontSize: "14px",
-      color: state.isSelected ? "#2563eb" : "#334155",
-      backgroundColor: state.isSelected
-        ? "#eff6ff"
-        : state.isFocused
-          ? "#f8fafc"
-          : "#ffffff",
+      color: state.data.isSelectAll
+        ? "#60a5fa"
+        : state.isSelected
+          ? "#2563eb"
+          : "#334155",
+      backgroundColor: state.data.isSelectAll
+        ? state.isFocused
+          ? "#e0f2fe"
+          : "#f0f9ff"
+        : state.isSelected
+          ? "#eff6ff"
+          : state.isFocused
+            ? "#f8fafc"
+            : "#ffffff",
 
       cursor: "pointer",
-      fontWeight: "500",
+      fontWeight: state.data.isSelectAll ? "600" : "500",
 
       "&:active": {
-        backgroundColor: "#dbeafe",
+        backgroundColor: state.data.isSelectAll ? "#e0f2fe" : "#dbeafe",
       },
     }),
 
@@ -166,12 +178,16 @@ export default function SelectMenu({
 
   return (
     <div className="">
-      <label htmlFor={field} className={`form-lbl ${additionalInfo.length > 0 ? `pb-1` : `pb-2`}`}>
-        {label}{required && <span className="text-red-400 text-sm">*</span>}
+      <label
+        htmlFor={field}
+        className={`form-lbl ${additionalInfo.length > 0 ? `pb-1` : `pb-2`}`}
+      >
+        {label}
+        {required && <span className="text-red-400 text-sm pl-1">*</span>}
       </label>
-      {
-        additionalInfo.length > 0 && <p className="text-xs italic text-slate-500 pb-3">{additionalInfo}</p>
-      }
+      {additionalInfo.length > 0 && (
+        <p className="text-xs italic text-slate-500 pb-3">{additionalInfo}</p>
+      )}
       <SelectComponent
         id={field}
         isMulti={isMultiSelect}
@@ -186,6 +202,9 @@ export default function SelectMenu({
         placeholder={placeholder}
         closeMenuOnSelect={closeMenuOnSelect}
         styles={customStyles}
+        menuPortalTarget={menuPortalTarget}
+        menuPosition={menuPortalTarget ? "fixed" : undefined}
+        isDisabled={isDisabled}
         onCreateOption={isCreatable ? onCreateOption : undefined}
         formatCreateLabel={(inputValue) => `Create "${inputValue}"`}
       />

@@ -15,13 +15,14 @@ function PayBreakdown({
   errors,
   showRupee,
 }) {
-
   return (
     <div className="flex-1 space-y-1 mt-4">
-      <label className="form-lbl">{heading}</label>
+      {heading.length > 0 && <label className="form-lbl">{heading}</label>}
 
       <div>
-        <p className="mb-3 text-xs text-slate-400">{desc}</p>
+        {desc.length > 0 && (
+          <p className="mb-3 text-xs text-slate-400">{desc}</p>
+        )}
 
         <div className="max-h-[200px] space-y-2 overflow-y-auto">
           {selectedParticipants.map((participant, i) => (
@@ -57,9 +58,9 @@ function PayBreakdown({
                       field
                     ] ?? 0) === 0
                       ? ""
-                      : getter.find((item) => item.id === participant.value)?.[
+                      : (getter.find((item) => item.id === participant.value)?.[
                           field
-                        ] ?? 0
+                        ] ?? 0)
                   }
                   id={`${idPart}-${participant.value}`}
                 />

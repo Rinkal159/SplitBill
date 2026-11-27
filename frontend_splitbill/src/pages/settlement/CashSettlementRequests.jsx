@@ -17,6 +17,7 @@ function CashSettlementRequests({
   sentSettlementRequests,
   setSentSettlementRequests,
   sentSettlementRequestsLoading,
+  onSettlementChange,
 }) {
   const [visible, setVisible] = useState("received");
   const [receivedRequests, setReceivedRequests] = useState([]);
@@ -179,6 +180,7 @@ function CashSettlementRequests({
           previous.filter((item) => item.id !== id),
         );
       }
+      onSettlementChange?.();
     } catch (error) {
       setBackErrors(getBackendError(error));
     } finally {

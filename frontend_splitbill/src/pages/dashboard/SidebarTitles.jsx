@@ -22,7 +22,7 @@ function SidebarTitles({
         group text-lg text-center py-4 relative hover:cursor-pointer
         ${
           isActive
-            ? "font-medium bg-gradient-to-br from-blue-50 via-white to-blue-50 rounded-tl-2xl rounded-tr-2xl shadow-md shadow-blue-100"
+            ? "sidebar-active-title font-medium bg-gradient-to-br from-blue-50 via-white to-blue-50 rounded-tl-2xl rounded-tr-2xl shadow-md shadow-blue-100"
             : "text-slate-400 shadow-md shadow-blue-50 hover:shadow-blue-100"
         }
       `}
