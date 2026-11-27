@@ -9,7 +9,7 @@ A full-stack expense-sharing app for tracking shared costs, managing friend and 
 
 ## Demo
 
-[https://github.com/user-attachments/assets/REPLACE-WITH-YOUR-UPLOADED-VIDEO-ID](https://githuKb.com/user-attachments/assets/bf97b090-2e62-49bd-ad83-3fe017b4c569)
+[https://github.com/user-attachments/assets/bf97b090-2e62-49bd-ad83-3fe017b4c569](https://github.com/user-attachments/assets/bf97b090-2e62-49bd-ad83-3fe017b4c569)
 
 > If the video doesn't load, you can [download or watch it directly](docs/splitbill-demo.mp4).
 
