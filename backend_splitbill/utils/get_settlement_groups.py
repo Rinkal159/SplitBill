@@ -4,7 +4,7 @@ from collections import defaultdict
 from sqlalchemy.orm import contains_eager, lazyload
 
 
-async def get_settlement_groups(splits, db):
+async def get_settlement_groups(splits, db, statuses=None):
     split_ids = []
     for split in splits:
         split_ids.append(split.id)
@@ -21,7 +21,7 @@ async def get_settlement_groups(splits, db):
         .where(
             SettlementSplits.split_id.in_(split_ids),
             Settlement.status.in_(
-                [SettlementStatus.PENDING, SettlementStatus.CONFIRMED]
+                statuses or [SettlementStatus.PENDING, SettlementStatus.CONFIRMED]
             ),
         )
     )
